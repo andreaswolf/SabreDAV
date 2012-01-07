@@ -243,6 +243,8 @@ class Sabre_DAV_Client {
 
         $curlSettings = array(
             CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_POSTFIELDS => $body,
             // Return headers as part of the response
             CURLOPT_HEADER => true,
             // do not read body with HEAD requests (this is neccessary because cURL does not ignore the body with HEAD
@@ -252,15 +254,6 @@ class Sabre_DAV_Client {
             // response body
             CURLOPT_NOBODY => ($method == 'HEAD')
         );
-
-        switch ($method) {
-            case 'PUT':
-                $curlSettings[CURLOPT_PUT] = true;
-                break;
-            default:
-                $curlSettings[CURLOPT_CUSTOMREQUEST] = $method;
-                break;
-        }
 
         // Adding HTTP headers
         $nHeaders = array();
