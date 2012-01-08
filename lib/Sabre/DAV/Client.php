@@ -244,7 +244,6 @@ class Sabre_DAV_Client {
         $curlSettings = array(
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_POSTFIELDS => $body,
             // Return headers as part of the response
             CURLOPT_HEADER => true,
             // do not read body with HEAD requests (this is neccessary because cURL does not ignore the body with HEAD
@@ -254,6 +253,20 @@ class Sabre_DAV_Client {
             // response body
             CURLOPT_NOBODY => ($method == 'HEAD')
         );
+
+        // Stream request body from a resource
+        if (is_resource($body)) {
+            $resourceHandler = new Sabre_DAV_ResourceHandler();
+            $curlSettings[CURLOPT_INFILE] = $body;
+            $curlSettings[CURLOPT_READFUNCTION] = array($resourceHandler, 'readCallback');
+            // To be able to use a file as input for the PUT request, we have to use CURLOPT_PUT;
+            // CURLOPT_CUSTOMREQUEST = "PUT" will not work!
+            $curlSettings[CURLOPT_PUT] = true;
+            unset($curlSettings[CURLOPT_CUSTOMREQUEST]);
+        // Use string as request body
+        } else {
+            $curlSettings[CURLOPT_POSTFIELDS] = $body;
+        }
 
         // Adding HTTP headers
         $nHeaders = array();
