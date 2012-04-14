@@ -22,6 +22,7 @@ class Sabre_DAV_Client {
     protected $userName;
     protected $password;
     protected $proxy;
+    protected $timeout = 10;
 
     /**
      * Constructor
@@ -46,7 +47,8 @@ class Sabre_DAV_Client {
             'baseUri',
             'userName',
             'password',
-            'proxy'
+            'proxy',
+            'timeout'
         );
 
         foreach($validSettings as $validSetting) {
@@ -272,6 +274,8 @@ class Sabre_DAV_Client {
             $curlSettings[CURLOPT_POSTFIELDS] = $body;
         }
 
+        $curlSettings[CURLOPT_TIMEOUT] = $this->timeout;
+
         // Adding HTTP headers
         $nHeaders = array();
         foreach($headers as $key=>$value) {
@@ -325,8 +329,37 @@ class Sabre_DAV_Client {
             'headers' => $headers
         );
 
-        if ($curlErrNo) {
-            throw new Sabre_DAV_Exception('[CURL] Error while making request: ' . $curlError . ' (error code: ' . $curlErrNo . ')');
+        foreach ($this->observers as $observer) {
+            $observer->notifyRequest($curlSettings, $response);
+        }
+
+        if (!empty($curlErrNo)) {
+            switch ($curlErrNo) {
+                case 28:
+                    throw new Sabre_DAV_Exception_Timeout();
+                    break;
+
+                case 65:
+                    // this is a workaround for PHP bug #47204 - uploading from a stream fails when a redirect is done
+                    // because the stream cannot be rewinded. Redirects seem to happen e.g. with some server implementations when
+                    // authentication is used.
+                    if (is_resource($body)) {
+                        rewind($body);
+                        $contents = '';
+                        while (!feof($body)) {
+                            $contents .= fread($body, 16384);
+                        }
+
+                        return $this->request($method, $url, $contents, $headers);
+                    }
+
+                    break;
+
+                default:
+                    throw new Sabre_DAV_Exception('[CURL] Error while making request: ' . $curlError . ' (error code: ' . $curlErrNo . ')');
+                    break;
+            }
+
         }
 
         if ($response['statusCode']>=400) {
