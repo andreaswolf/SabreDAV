@@ -8,7 +8,7 @@
  *
  * @package Sabre
  * @subpackage CalDAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -27,6 +27,21 @@ class Sabre_CalDAV_CalendarQueryParser {
      * @var array
      */
     public $filters;
+
+    /**
+     * This property will contain null if CALDAV:expand was not specified, 
+     * otherwise it will contain an array with 2 elements (start, end). Each 
+     * contain a DateTime object.
+     *
+     * If expand is specified, recurring calendar objects are to be expanded 
+     * into their individual components, and only the components that fall 
+     * within the specified time-range are to be returned.
+     *
+     * For more details, see rfc4791, section 9.6.5.
+     * 
+     * @var null|array 
+     */
+    public $expand;
 
     /**
      * DOM Document
@@ -53,6 +68,7 @@ class Sabre_CalDAV_CalendarQueryParser {
 
         $this->xpath = new DOMXPath($dom);
         $this->xpath->registerNameSpace('cal',Sabre_CalDAV_Plugin::NS_CALDAV);
+        $this->xpath->registerNameSpace('dav','urn:DAV');
 
     }
 
@@ -77,6 +93,12 @@ class Sabre_CalDAV_CalendarQueryParser {
 
         $this->filters = $compFilters[0];
         $this->requestedProperties = array_keys(Sabre_DAV_XMLUtil::parseProperties($this->dom->firstChild));
+
+        $expand = $this->xpath->query('/cal:calendar-query/dav:prop/cal:calendar-data/cal:expand');
+        if ($expand->length>0) {
+            $this->expand = $this->parseExpand($expand->item(0));
+        }
+             
 
     }
 
@@ -107,6 +129,7 @@ class Sabre_CalDAV_CalendarQueryParser {
                 'VTODO',
                 'VJOURNAL',
                 'VFREEBUSY',
+                'VALARM',
             ))) {
                 throw new Sabre_DAV_Exception_BadRequest('The time-range filter is not defined for the ' . $compFilter['name'] . ' component');
             };
@@ -154,7 +177,7 @@ class Sabre_CalDAV_CalendarQueryParser {
      * @param DOMElement $parentNode
      * @return array
      */
-    public function parseParamFilters(DOMElement $parentNode) {
+    protected function parseParamFilters(DOMElement $parentNode) {
 
         $paramFilterNodes = $this->xpath->query('cal:param-filter', $parentNode);
         $result = array();
@@ -181,7 +204,7 @@ class Sabre_CalDAV_CalendarQueryParser {
      * @param DOMElement $parentNode
      * @return array|null
      */
-    public function parseTextMatch(DOMElement $parentNode) {
+    protected function parseTextMatch(DOMElement $parentNode) {
 
         $textMatchNodes = $this->xpath->query('cal:text-match', $parentNode);
 
@@ -208,7 +231,7 @@ class Sabre_CalDAV_CalendarQueryParser {
      * @param DOMElement $parentNode
      * @return array|null
      */
-    public function parseTimeRange(DOMElement $parentNode) {
+    protected function parseTimeRange(DOMElement $parentNode) {
 
         $timeRangeNodes = $this->xpath->query('cal:time-range', $parentNode);
         if ($timeRangeNodes->length === 0) {
@@ -230,6 +253,37 @@ class Sabre_CalDAV_CalendarQueryParser {
 
         if (!is_null($start) && !is_null($end) && $end <= $start) {
             throw new Sabre_DAV_Exception_BadRequest('The end-date must be larger than the start-date in the time-range filter');
+        }
+
+        return array(
+            'start' => $start,
+            'end' => $end,
+        );
+
+    }
+
+    /**
+     * Parses the CALDAV:expand element
+     * 
+     * @param DOMElement $parentNode 
+     * @return void
+     */
+    protected function parseExpand(DOMElement $parentNode) {
+
+        $start = $parentNode->getAttribute('start');
+        if(!$start) {
+            throw new Sabre_DAV_Exception_BadRequest('The "start" attribute is required for the CALDAV:expand element');
+        } 
+        $start = Sabre_VObject_DateTimeParser::parseDateTime($start);
+
+        $end = $parentNode->getAttribute('end');
+        if(!$end) {
+            throw new Sabre_DAV_Exception_BadRequest('The "end" attribute is required for the CALDAV:expand element');
+        } 
+        $end = Sabre_VObject_DateTimeParser::parseDateTime($end);
+        
+        if ($end <= $start) {
+            throw new Sabre_DAV_Exception_BadRequest('The end-date must be larger than the start-date in the expand element.');
         }
 
         return array(

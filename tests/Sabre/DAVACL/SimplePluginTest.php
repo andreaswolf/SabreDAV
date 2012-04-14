@@ -248,9 +248,6 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
         $auth->beforeMethod('GET','/');
 
         $expected = array(
-            '{DAV:}read',
-            '{DAV:}read-acl',
-            '{DAV:}read-current-user-privilege-set',
             '{DAV:}write',
             '{DAV:}write-acl',
             '{DAV:}write-properties',
@@ -258,12 +255,55 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
             '{DAV:}bind',
             '{DAV:}unbind',
             '{DAV:}unlock',
+            '{DAV:}read',
+            '{DAV:}read-acl',
+            '{DAV:}read-current-user-privilege-set',
         );
 
         $this->assertEquals($expected,$aclPlugin->getCurrentUserPrivilegeSet('foo'));
 
     }
 
+    function testCheckPrivileges() {
+
+        $acl = array(
+            array(
+                'principal' => 'principals/admin',
+                'privilege' => '{DAV:}read',
+            ),
+            array(
+                'principal' => 'principals/user1',
+                'privilege' => '{DAV:}read',
+            ),
+            array(
+                'principal' => 'principals/admin',
+                'privilege' => '{DAV:}write',
+            ),
+        );
+
+
+        $tree = array(
+            new Sabre_DAVACL_MockACLNode('foo',$acl),
+
+            new Sabre_DAV_SimpleDirectory('principals', array(
+                new Sabre_DAVACL_MockPrincipal('admin','principals/admin'),
+            )),
+
+        );
+
+        $server = new Sabre_DAV_Server($tree);
+        $aclPlugin = new Sabre_DAVACL_Plugin();
+        $server->addPlugin($aclPlugin);
+
+        $auth = new Sabre_DAV_Auth_Plugin(new Sabre_DAV_Auth_MockBackend(),'SabreDAV');
+        $server->addPlugin($auth);
+
+        //forcing login
+        //$auth->beforeMethod('GET','/');
+
+        $this->assertFalse($aclPlugin->checkPrivileges('foo', array('{DAV:}read'), Sabre_DAVACL_Plugin::R_PARENT, false));
+
+    }
 }
 
 

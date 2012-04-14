@@ -8,11 +8,16 @@
  *
  * @package Sabre
  * @subpackage CalDAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
 class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
+
+    /**
+     * We need to specify a max date, because we need to stop *somewhere*
+     */
+    const MAX_DATE = '2040-01-01';
 
     /**
      * pdo
@@ -93,7 +98,7 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
 
         // Making fields a comma-delimited list
         $fields = implode(', ', $fields);
-        $stmt = $this->pdo->prepare("SELECT " . $fields . " FROM `".$this->calendarTableName."` WHERE principaluri = ?");
+        $stmt = $this->pdo->prepare("SELECT " . $fields . " FROM ".$this->calendarTableName." WHERE principaluri = ? ORDER BY calendarorder ASC");
         $stmt->execute(array($principalUri));
 
         $calendars = array();
@@ -169,7 +174,7 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
             }
         }
 
-        $stmt = $this->pdo->prepare("INSERT INTO `".$this->calendarTableName."` (".implode(', ', $fieldNames).") VALUES (".implode(', ',array_keys($values)).")");
+        $stmt = $this->pdo->prepare("INSERT INTO ".$this->calendarTableName." (".implode(', ', $fieldNames).") VALUES (".implode(', ',array_keys($values)).")");
         $stmt->execute($values);
 
         return $this->pdo->lastInsertId();
@@ -263,7 +268,7 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
         }
         $valuesSql[] = 'ctag = ctag + 1';
 
-        $stmt = $this->pdo->prepare("UPDATE `" . $this->calendarTableName . "` SET " . implode(', ',$valuesSql) . " WHERE id = ?");
+        $stmt = $this->pdo->prepare("UPDATE " . $this->calendarTableName . " SET " . implode(', ',$valuesSql) . " WHERE id = ?");
         $newValues['id'] = $calendarId;
         $stmt->execute(array_values($newValues));
 
@@ -279,10 +284,10 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
      */
     public function deleteCalendar($calendarId) {
 
-        $stmt = $this->pdo->prepare('DELETE FROM `'.$this->calendarObjectTableName.'` WHERE calendarid = ?');
+        $stmt = $this->pdo->prepare('DELETE FROM '.$this->calendarObjectTableName.' WHERE calendarid = ?');
         $stmt->execute(array($calendarId));
 
-        $stmt = $this->pdo->prepare('DELETE FROM `'.$this->calendarTableName.'` WHERE id = ?');
+        $stmt = $this->pdo->prepare('DELETE FROM '.$this->calendarTableName.' WHERE id = ?');
         $stmt->execute(array($calendarId));
 
     }
@@ -316,9 +321,22 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
      */
     public function getCalendarObjects($calendarId) {
 
-        $stmt = $this->pdo->prepare('SELECT * FROM `'.$this->calendarObjectTableName.'` WHERE calendarid = ?');
+        $stmt = $this->pdo->prepare('SELECT id, uri, lastmodified, etag, calendarid, size FROM '.$this->calendarObjectTableName.' WHERE calendarid = ?');
         $stmt->execute(array($calendarId));
-        return $stmt->fetchAll();
+
+        $result = array();
+        foreach($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $result[] = array(
+                'id'           => $row['id'],
+                'uri'          => $row['uri'],
+                'lastmodified' => $row['lastmodified'],
+                'etag'         => '"' . $row['etag'] . '"',
+                'calendarid'   => $row['calendarid'],
+                'size'         => (int)$row['size'],
+            );
+        }
+
+        return $result;
 
     }
 
@@ -336,43 +354,165 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
      */
     public function getCalendarObject($calendarId,$objectUri) {
 
-        $stmt = $this->pdo->prepare('SELECT * FROM `'.$this->calendarObjectTableName.'` WHERE calendarid = ? AND uri = ?');
+        $stmt = $this->pdo->prepare('SELECT id, uri, lastmodified, etag, calendarid, size, calendardata FROM '.$this->calendarObjectTableName.' WHERE calendarid = ? AND uri = ?');
         $stmt->execute(array($calendarId, $objectUri));
-        return $stmt->fetch();
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if(!$row) return null;
+
+        return array(
+            'id'           => $row['id'],
+            'uri'          => $row['uri'],
+            'lastmodified' => $row['lastmodified'],
+            'etag'         => '"' . $row['etag'] . '"',
+            'calendarid'   => $row['calendarid'],
+            'size'         => (int)$row['size'],
+            'calendardata' => $row['calendardata'],
+         );
 
     }
+
 
     /**
      * Creates a new calendar object.
      *
-     * @param string $calendarId
+     * It is possible return an etag from this function, which will be used in
+     * the response to this PUT request. Note that the ETag must be surrounded
+     * by double-quotes.
+     *
+     * However, you should only really return this ETag if you don't mangle the
+     * calendar-data. If the result of a subsequent GET to this object is not
+     * the exact same as this request body, you should omit the ETag.
+     *
+     * @param mixed $calendarId
      * @param string $objectUri
      * @param string $calendarData
-     * @return void
+     * @return string|null
      */
     public function createCalendarObject($calendarId,$objectUri,$calendarData) {
 
-        $stmt = $this->pdo->prepare('INSERT INTO `'.$this->calendarObjectTableName.'` (calendarid, uri, calendardata, lastmodified) VALUES (?,?,?,?)');
-        $stmt->execute(array($calendarId,$objectUri,$calendarData,time()));
-        $stmt = $this->pdo->prepare('UPDATE `'.$this->calendarTableName.'` SET ctag = ctag + 1 WHERE id = ?');
+        $extraData = $this->getDenormalizedData($calendarData);
+
+        $stmt = $this->pdo->prepare('INSERT INTO '.$this->calendarObjectTableName.' (calendarid, uri, calendardata, lastmodified, etag, size, componenttype, firstoccurence, lastoccurence) VALUES (?,?,?,?,?,?,?,?,?)');
+        $stmt->execute(array(
+            $calendarId,
+            $objectUri,
+            $calendarData,
+            time(),
+            $extraData['etag'],
+            $extraData['size'],
+            $extraData['componentType'],
+            $extraData['firstOccurence'],
+            $extraData['lastOccurence'],
+        ));
+        $stmt = $this->pdo->prepare('UPDATE '.$this->calendarTableName.' SET ctag = ctag + 1 WHERE id = ?');
         $stmt->execute(array($calendarId));
+
+        return '"' . $extraData['etag'] . '"';
 
     }
 
     /**
      * Updates an existing calendarobject, based on it's uri.
      *
-     * @param string $calendarId
+     * It is possible return an etag from this function, which will be used in
+     * the response to this PUT request. Note that the ETag must be surrounded
+     * by double-quotes.
+     *
+     * However, you should only really return this ETag if you don't mangle the
+     * calendar-data. If the result of a subsequent GET to this object is not
+     * the exact same as this request body, you should omit the ETag.
+     *
+     * @param mixed $calendarId
      * @param string $objectUri
      * @param string $calendarData
-     * @return void
+     * @return string|null
      */
     public function updateCalendarObject($calendarId,$objectUri,$calendarData) {
 
-        $stmt = $this->pdo->prepare('UPDATE `'.$this->calendarObjectTableName.'` SET calendardata = ?, lastmodified = ? WHERE calendarid = ? AND uri = ?');
-        $stmt->execute(array($calendarData,time(),$calendarId,$objectUri));
-        $stmt = $this->pdo->prepare('UPDATE `'.$this->calendarTableName.'` SET ctag = ctag + 1 WHERE id = ?');
+        $extraData = $this->getDenormalizedData($calendarData);
+
+        $stmt = $this->pdo->prepare('UPDATE '.$this->calendarObjectTableName.' SET calendardata = ?, lastmodified = ?, etag = ?, size = ?, componenttype = ?, firstoccurence = ?, lastoccurence = ? WHERE calendarid = ? AND uri = ?');
+        $stmt->execute(array($calendarData,time(), $extraData['etag'], $extraData['size'], $extraData['componentType'], $extraData['firstOccurence'], $extraData['lastOccurence'] ,$calendarId,$objectUri));
+        $stmt = $this->pdo->prepare('UPDATE '.$this->calendarTableName.' SET ctag = ctag + 1 WHERE id = ?');
         $stmt->execute(array($calendarId));
+
+        return '"' . $extraData['etag'] . '"';
+
+    }
+
+    /**
+     * Parses some information from calendar objects, used for optimized
+     * calendar-queries.
+     *
+     * Returns an array with the following keys:
+     *   * etag
+     *   * size
+     *   * componentType
+     *   * firstOccurence
+     *   * lastOccurence
+     *
+     * @param string $calendarData
+     * @return array
+     */
+    protected function getDenormalizedData($calendarData) {
+
+        $vObject = Sabre_VObject_Reader::read($calendarData);
+        $componentType = null;
+        $component = null;
+        $firstOccurence = null;
+        $lastOccurence = null;
+        foreach($vObject->getComponents() as $component) {
+            if ($component->name!=='VTIMEZONE') {
+                $componentType = $component->name;
+                break;
+            }
+        }
+        if (!$componentType) {
+            throw new Sabre_DAV_Exception_BadRequest('Calendar objects must have a VJOURNAL, VEVENT or VTODO component');
+        }
+        if ($componentType === 'VEVENT') {
+            $firstOccurence = $component->DTSTART->getDateTime()->getTimeStamp();
+            // Finding the last occurence is a bit harder
+            if (!isset($component->RRULE)) {
+                if (isset($component->DTEND)) {
+                    $lastOccurence = $component->DTEND->getDateTime()->getTimeStamp();
+                } elseif (isset($component->DURATION)) {
+                    $endDate = clone $component->DTSTART->getDateTime();
+                    $endDate->add(Sabre_VObject_DateTimeParser::parse($component->DURATION->value));
+                    $lastOccurence = $endDate->getTimeStamp();
+                } elseif ($component->DTSTART->getDateType()===Sabre_VObject_Property_DateTime::DATE) {
+                    $endDate = clone $component->DTSTART->getDateTime();
+                    $endDate->modify('+1 day');
+                    $lastOccurence = $endDate->getTimeStamp();
+                } else {
+                    $lastOccurence = $firstOccurence;
+                }
+            } else {
+                $it = new Sabre_VObject_RecurrenceIterator($vObject, (string)$component->UID);
+                $maxDate = new DateTime(self::MAX_DATE);
+                if ($it->isInfinite()) {
+                    $lastOccurence = $maxDate->getTimeStamp();
+                } else {
+                    $end = $it->getDtEnd();
+                    while($it->valid() && $end < $maxDate) {
+                        $end = $it->getDtEnd();
+                        $it->next();
+
+                    }
+                    $lastOccurence = $end->getTimeStamp();
+                }
+
+            }
+        }
+
+        return array(
+            'etag' => md5($calendarData),
+            'size' => strlen($calendarData),
+            'componentType' => $componentType,
+            'firstOccurence' => $firstOccurence,
+            'lastOccurence'  => $lastOccurence,
+        );
 
     }
 
@@ -385,12 +525,133 @@ class Sabre_CalDAV_Backend_PDO extends Sabre_CalDAV_Backend_Abstract {
      */
     public function deleteCalendarObject($calendarId,$objectUri) {
 
-        $stmt = $this->pdo->prepare('DELETE FROM `'.$this->calendarObjectTableName.'` WHERE calendarid = ? AND uri = ?');
+        $stmt = $this->pdo->prepare('DELETE FROM '.$this->calendarObjectTableName.' WHERE calendarid = ? AND uri = ?');
         $stmt->execute(array($calendarId,$objectUri));
-        $stmt = $this->pdo->prepare('UPDATE `'. $this->calendarTableName .'` SET ctag = ctag + 1 WHERE id = ?');
+        $stmt = $this->pdo->prepare('UPDATE '. $this->calendarTableName .' SET ctag = ctag + 1 WHERE id = ?');
         $stmt->execute(array($calendarId));
 
     }
 
+    /**
+     * Performs a calendar-query on the contents of this calendar.
+     *
+     * The calendar-query is defined in RFC4791 : CalDAV. Using the
+     * calendar-query it is possible for a client to request a specific set of
+     * object, based on contents of iCalendar properties, date-ranges and
+     * iCalendar component types (VTODO, VEVENT).
+     *
+     * This method should just return a list of (relative) urls that match this
+     * query.
+     *
+     * The list of filters are specified as an array. The exact array is
+     * documented by Sabre_CalDAV_CalendarQueryParser.
+     *
+     * Note that it is extremely likely that getCalendarObject for every path
+     * returned from this method will be called almost immediately after. You
+     * may want to anticipate this to speed up these requests.
+     *
+     * This method provides a default implementation, which parses *all* the
+     * iCalendar objects in the specified calendar.
+     *
+     * This default may well be good enough for personal use, and calendars
+     * that aren't very large. But if you anticipate high usage, big calendars
+     * or high loads, you are strongly adviced to optimize certain paths.
+     *
+     * The best way to do so is override this method and to optimize
+     * specifically for 'common filters'.
+     *
+     * Requests that are extremely common are:
+     *   * requests for just VEVENTS
+     *   * requests for just VTODO
+     *   * requests with a time-range-filter on a VEVENT.
+     *
+     * ..and combinations of these requests. It may not be worth it to try to
+     * handle every possible situation and just rely on the (relatively
+     * easy to use) CalendarQueryValidator to handle the rest.
+     *
+     * Note that especially time-range-filters may be difficult to parse. A
+     * time-range filter specified on a VEVENT must for instance also handle
+     * recurrence rules correctly.
+     * A good example of how to interprete all these filters can also simply
+     * be found in Sabre_CalDAV_CalendarQueryFilter. This class is as correct
+     * as possible, so it gives you a good idea on what type of stuff you need
+     * to think of.
+     *
+     * This specific implementation (for the PDO) backend optimizes filters on
+     * specific components, and VEVENT time-ranges.
+     *
+     * @param string $calendarId
+     * @param array $filters
+     * @return array
+     */
+    public function calendarQuery($calendarId, array $filters) {
 
+        $result = array();
+        $validator = new Sabre_CalDAV_CalendarQueryValidator();
+
+        $componentType = null;
+        $requirePostFilter = true;
+        $timeRange = null;
+
+        // if no filters were specified, we don't need to filter after a query
+        if (!$filters['prop-filters'] && !$filters['comp-filters']) {
+            $requirePostFilter = false;
+        }
+
+        // Figuring out if there's a component filter
+        if (count($filters['comp-filters']) > 0 && !$filters['comp-filters'][0]['is-not-defined']) {
+            $componentType = $filters['comp-filters'][0]['name'];
+
+            // Checking if we need post-filters
+            if (!$filters['prop-filters'] && !$filters['comp-filters'][0]['comp-filters'] && !$filters['comp-filters'][0]['time-range'] && !$filters['comp-filters'][0]['prop-filters']) {
+                $requirePostFilter = false;
+            }
+            // There was a time-range filter
+            if ($componentType == 'VEVENT' && isset($filters['comp-filters'][0]['time-range'])) {
+                $timeRange = $filters['comp-filters'][0]['time-range'];
+            }
+
+        }
+
+        if ($requirePostFilter) {
+            $query = "SELECT uri, calendardata FROM ".$this->calendarObjectTableName." WHERE calendarid = :calendarid";
+        } else {
+            $query = "SELECT uri FROM ".$this->calendarObjectTableName." WHERE calendarid = :calendarid";
+        }
+
+        $values = array(
+            'calendarid' => $calendarId,
+        );
+
+        if ($componentType) {
+            $query.=" AND componenttype = :componenttype";
+            $values['componenttype'] = $componentType;
+        }
+
+        if ($timeRange && $timeRange['start']) {
+            $query.=" AND lastoccurence > :startdate";
+            $values['startdate'] = $timeRange['start']->getTimeStamp();
+        }
+        if ($timeRange && $timeRange['end']) {
+            $query.=" AND firstoccurence < :enddate";
+            $values['enddate'] = $timeRange['end']->getTimeStamp();
+        }
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute($values);
+
+        $result = array();
+        while($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            if ($requirePostFilter) {
+                if (!$this->validateFilterForObject($row, $filters)) {
+                    continue;
+                }
+            }
+            $result[] = $row['uri'];
+
+        }
+
+        return $result;
+
+    }
 }

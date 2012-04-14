@@ -7,7 +7,7 @@
  *
  * @package Sabre
  * @subpackage CardDAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -55,7 +55,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      * Returns a card
      *
      * @param string $name
-     * @return Sabre_DAV_Card
+     * @return Sabre_CardDAV_ICard
      */
     public function getChild($name) {
 
@@ -98,11 +98,13 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
     /**
      * Creates a new file
      *
-     * The contents of the new file must be a valid VCARD
+     * The contents of the new file must be a valid VCARD.
+     *
+     * This method may return an ETag.
      *
      * @param string $name
      * @param resource $vcardData
-     * @return void
+     * @return string|null
      */
     public function createFile($name,$vcardData = null) {
 
@@ -110,7 +112,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
         // Converting to UTF-8, if needed
         $vcardData = Sabre_DAV_StringUtil::ensureUTF8($vcardData);
 
-        $this->carddavBackend->createCard($this->addressBookInfo['id'],$name,$vcardData);
+        return $this->carddavBackend->createCard($this->addressBookInfo['id'],$name,$vcardData);
 
     }
 

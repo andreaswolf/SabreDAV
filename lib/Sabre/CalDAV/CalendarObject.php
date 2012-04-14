@@ -5,7 +5,7 @@
  *
  * @package Sabre
  * @subpackage CalDAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -85,26 +85,19 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
     /**
      * Updates the ICalendar-formatted object
      *
-     * @param string $calendarData
-     * @return void
+     * @param string|resource $calendarData
+     * @return string
      */
     public function put($calendarData) {
 
-        if (is_resource($calendarData))
+        if (is_resource($calendarData)) {
             $calendarData = stream_get_contents($calendarData);
-
-        // Converting to UTF-8, if needed
-        $calendarData = Sabre_DAV_StringUtil::ensureUTF8($calendarData);
-
-        $supportedComponents = null;
-        $sccs = '{' . Sabre_CalDAV_Plugin::NS_CALDAV . '}supported-calendar-component-set';
-        if (isset($this->calendarInfo[$sccs]) && $this->calendarInfo[$sccs] instanceof Sabre_CalDAV_Property_SupportedCalendarComponentSet) {
-            $supportedComponents = $this->calendarInfo[$sccs]->getValue();
         }
-        Sabre_CalDAV_ICalendarUtil::validateICalendarObject($calendarData, $supportedComponents);
-
-        $this->caldavBackend->updateCalendarObject($this->calendarInfo['id'],$this->objectData['uri'],$calendarData);
+        $etag = $this->caldavBackend->updateCalendarObject($this->calendarInfo['id'],$this->objectData['uri'],$calendarData);
         $this->objectData['calendardata'] = $calendarData;
+        $this->objectData['etag'] = $etag;
+
+        return $etag;
 
     }
 
@@ -126,7 +119,7 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
      */
     public function getContentType() {
 
-        return 'text/calendar';
+        return 'text/calendar; charset=utf-8';
 
     }
 
@@ -150,7 +143,7 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
     /**
      * Returns the last modification date as a unix timestamp
      *
-     * @return time
+     * @return int
      */
     public function getLastModified() {
 

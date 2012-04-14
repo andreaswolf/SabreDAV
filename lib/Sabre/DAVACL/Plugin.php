@@ -3,7 +3,7 @@
 /**
  * SabreDAV ACL Plugin
  *
- * This plugin provides funcitonality to enforce ACL permissions.
+ * This plugin provides functionality to enforce ACL permissions.
  * ACL is defined in RFC3744.
  *
  * In addition it also provides support for the {DAV:}current-user-principal
@@ -12,7 +12,7 @@
  *
  * @package Sabre
  * @subpackage DAVACL
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -88,7 +88,6 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
      */
     public $defaultUsernamePath = 'principals';
 
-
     /**
      * This list of properties are the properties a client can search on using
      * the {DAV:}principal-property-search report.
@@ -101,6 +100,15 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
         '{DAV:}displayname' => 'Display name',
         '{http://sabredav.org/ns}email-address' => 'Email address',
     );
+
+    /**
+     * Any principal uri's added here, will automatically be added to the list
+     * of ACL's. They will effectively receive {DAV:}all privileges, as a
+     * protected privilege.
+     *
+     * @var array
+     */
+    public $adminPrincipals = array();
 
     /**
      * Returns a list of features added by this plugin.
@@ -225,6 +233,7 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
 
         $authPlugin = $this->server->getPlugin('auth');
         if (is_null($authPlugin)) return null;
+        /** @var $authPlugin Sabre_DAV_Auth_Plugin */
 
         $userName = $authPlugin->getCurrentUser();
         if (!$userName) return null;
@@ -438,10 +447,18 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
         if (is_string($node)) {
             $node = $this->server->tree->getNodeForPath($node);
         }
-        if ($node instanceof Sabre_DAVACL_IACL) {
-            return $node->getACL();
+        if (!$node instanceof Sabre_DAVACL_IACL) {
+            return null;
         }
-        return null;
+        $acl = $node->getACL();
+        foreach($this->adminPrincipals as $adminPrincipal) {
+            $acl[] = array(
+                'principal' => $adminPrincipal,
+                'privilege' => '{DAV:}all',
+                'protected' => true,
+            );
+        }
+        return $acl;
 
     }
 
@@ -515,17 +532,19 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
         $flat = $this->getFlatPrivilegeSet($node);
 
         $collected2 = array();
-        foreach($collected as $privilege) {
+        while(count($collected)) {
 
-            $collected2[] = $privilege['privilege'];
-            foreach($flat[$privilege['privilege']]['aggregates'] as $subPriv) {
-                if (!in_array($subPriv, $collected2))
-                    $collected2[] = $subPriv;
+            $current = array_pop($collected);
+            $collected2[] = $current['privilege'];
+
+            foreach($flat[$current['privilege']]['aggregates'] as $subPriv) {
+                $collected2[] = $subPriv;
+                $collected[] = $flat[$subPriv];
             }
 
         }
 
-        return $collected2;
+        return array_values(array_unique($collected2));
 
     }
 
@@ -753,7 +772,7 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
      * @param array $requestedProperties
      * @param array $returnedProperties
      * @TODO really should be broken into multiple methods, or even a class.
-     * @return void
+     * @return bool
      */
     public function beforeGetProperties($uri, Sabre_DAV_INode $node, &$requestedProperties, &$returnedProperties) {
 
@@ -917,7 +936,7 @@ class Sabre_DAVACL_Plugin extends Sabre_DAV_ServerPlugin {
     }
 
     /**
-     * This method handels HTTP REPORT requests
+     * This method handles HTTP REPORT requests
      *
      * @param string $reportName
      * @param DOMNode $dom

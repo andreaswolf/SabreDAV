@@ -2,14 +2,20 @@
 
 abstract class Sabre_CardDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_TestCase {
 
+    /**
+     * @var Sabre_CardDAV_Backend_PDO
+     */
     protected $backend;
 
+    /**
+     * @abstract
+     * @return PDO
+     */
     abstract function getPDO();
 
     public function setUp() {
 
-        $backend = new Sabre_CardDAV_Backend_PDO($this->getPDO());
-        $this->backend = $backend;
+        $this->backend = new Sabre_CardDAV_Backend_PDO($this->getPDO());
 
     }
 
@@ -202,7 +208,8 @@ abstract class Sabre_CardDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_T
      */
     public function testCreateCard() {
 
-        $this->backend->createCard(1, 'card2', 'data2');
+        $result = $this->backend->createCard(1, 'card2', 'data2');
+        $this->assertEquals('"' . md5('data2') . '"', $result);
         $result = $this->backend->getCard(1,'card2');
         $this->assertEquals(2, $result['id']);
         $this->assertEquals('card2', $result['uri']);
@@ -215,7 +222,9 @@ abstract class Sabre_CardDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_T
      */
     public function testUpdateCard() {
 
-        $this->backend->updateCard(1, 'card1', 'newdata');
+        $result = $this->backend->updateCard(1, 'card1', 'newdata');
+        $this->assertEquals('"' . md5('newdata') . '"', $result);
+
         $result = $this->backend->getCard(1,'card1');
         $this->assertEquals(1, $result['id']);
         $this->assertEquals('newdata', $result['carddata']);

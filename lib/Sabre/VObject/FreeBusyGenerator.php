@@ -12,7 +12,7 @@
  *
  * @package Sabre
  * @subpackage VObject
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -116,7 +116,7 @@ class Sabre_VObject_FreeBusyGenerator {
 
         foreach($this->objects as $object) {
 
-            foreach($object->getComponents() as $component) {
+            foreach($object->getBaseComponents() as $component) {
 
                 switch($component->name) {
 
@@ -140,7 +140,7 @@ class Sabre_VObject_FreeBusyGenerator {
 
                         if ($component->RRULE) {
 
-                            $iterator = new Sabre_VObject_RecurrenceIterator($component);
+                            $iterator = new Sabre_VObject_RecurrenceIterator($object, (string)$component->uid);
                             if ($this->start) {
                                 $iterator->fastForward($this->start);
                             }
@@ -250,7 +250,11 @@ class Sabre_VObject_FreeBusyGenerator {
         } else {
             $calendar = new Sabre_VObject_Component('VCALENDAR');
             $calendar->version = '2.0';
-            $calendar->prodid = '-//SabreDAV//Sabre VObject ' . Sabre_VObject_Version::VERSION . '//EN';
+            if (Sabre_DAV_Server::$exposeVersion) {
+                $calendar->prodid = '-//SabreDAV//Sabre VObject ' . Sabre_VObject_Version::VERSION . '//EN';
+            } else {
+                $calendar->prodid = '-//SabreDAV//Sabre VObject//EN';
+            }
             $calendar->calscale = 'GREGORIAN';
         }
 

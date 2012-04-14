@@ -7,7 +7,7 @@
  *
  * @package Sabre
  * @subpackage CardDAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -48,6 +48,8 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
 
         /* Events */
         $server->subscribeEvent('beforeGetProperties', array($this, 'beforeGetProperties'));
+        $server->subscribeEvent('afterGetProperties',  array($this, 'afterGetProperties'));
+        $server->subscribeEvent('updateProperties', array($this, 'updateProperties'));
         $server->subscribeEvent('report', array($this,'report'));
         $server->subscribeEvent('onHTMLActionsPanel', array($this,'htmlActionsPanel'));
         $server->subscribeEvent('onBrowserPostAction', array($this,'browserPostAction'));
@@ -64,6 +66,8 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
         $server->protectedProperties[] = '{' . self::NS_CARDDAV . '}max-resource-size';
         $server->protectedProperties[] = '{' . self::NS_CARDDAV . '}addressbook-home-set';
         $server->protectedProperties[] = '{' . self::NS_CARDDAV . '}supported-collation-set';
+
+        $server->propertyMap['{http://calendarserver.org/ns/}me-card'] = 'Sabre_DAV_Property_Href';
 
         $this->server = $server;
 
@@ -153,6 +157,77 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
 
             }
         }
+
+        if ($node instanceof Sabre_CardDAV_UserAddressBooks) {
+
+            $meCardProp = '{http://calendarserver.org/ns/}me-card';
+            if (in_array($meCardProp, $requestedProperties)) {
+
+                $props = $this->server->getProperties($node->getOwner(), array('{http://sabredav.org/ns}vcard-url'));
+                if (isset($props['{http://sabredav.org/ns}vcard-url'])) {
+
+                    $returnedProperties[200][$meCardProp] = new Sabre_DAV_Property_Href(
+                        $props['{http://sabredav.org/ns}vcard-url']
+                    );
+                    $pos = array_search($meCardProp, $requestedProperties);
+                    unset($requestedProperties[$pos]);
+
+                }
+
+            }
+
+        }
+
+    }
+
+    /**
+     * This event is triggered when a PROPPATCH method is executed
+     *
+     * @param array $mutations
+     * @param array $result
+     * @param Sabre_DAV_INode $node
+     * @return bool
+     */
+    public function updateProperties(&$mutations, &$result, $node) {
+
+        if (!$node instanceof Sabre_CardDAV_UserAddressBooks) {
+            return true;
+        }
+
+        $meCard = '{http://calendarserver.org/ns/}me-card';
+
+        // The only property we care about
+        if (!isset($mutations[$meCard]))
+            return true;
+
+        $value = $mutations[$meCard];
+        unset($mutations[$meCard]);
+
+        if ($value instanceof Sabre_DAV_Property_IHref) {
+            $value = $value->getHref();
+            $value = $this->server->calculateUri($value);
+        } elseif (!is_null($value)) {
+            $result[400][$meCard] = null;
+            return false;
+        }
+
+        $innerResult = $this->server->updateProperties(
+            $node->getOwner(),
+            array(
+                '{http://sabredav.org/ns}vcard-url' => $value,
+            )
+        );
+
+        $closureResult = false;
+        foreach($innerResult as $status => $props) {
+            if (is_array($props) && array_key_exists('{http://sabredav.org/ns}vcard-url', $props)) {
+                $result[$status][$meCard] = null;
+                $closureResult = ($status>=200 && $status<300);
+            }
+
+        }
+
+        return $result;
 
     }
 
@@ -456,6 +531,30 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
         // This implies for 'anyof' that the test failed, and for 'allof' that
         // we succeeded. Sounds weird, but makes sense.
         return $test==='allof';
+
+    }
+
+    /**
+     * This event is triggered after webdav-properties have been retrieved.
+     *
+     * @return bool
+     */
+    public function afterGetProperties($uri, &$properties) {
+
+        // If the request was made using the SOGO connector, we must rewrite
+        // the content-type property. By default SabreDAV will send back
+        // text/x-vcard; charset=utf-8, but for SOGO we must strip that last
+        // part.
+        if (!isset($properties[200]['{DAV:}getcontenttype']))
+            return;
+
+        if (strpos($this->server->httpRequest->getHeader('User-Agent'),'Thunderbird')===false) {
+            return;
+        }
+
+        if (strpos($properties[200]['{DAV:}getcontenttype'],'text/x-vcard')===0) {
+            $properties[200]['{DAV:}getcontenttype'] = 'text/x-vcard';
+        }
 
     }
 

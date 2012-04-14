@@ -72,6 +72,17 @@ class Sabre_VObject_ReaderTest extends PHPUnit_Framework_TestCase {
 
     }
 
+    function testReadPropertyWithNewLine() {
+
+        $data = 'PROPNAME:Line1\\nLine2\\NLine3\\\\Not the 4th line!';
+        $result = Sabre_VObject_Reader::read($data);
+
+        $this->assertInstanceOf('Sabre_VObject_Property', $result);
+        $this->assertEquals('PROPNAME', $result->name);
+        $this->assertEquals("Line1\nLine2\nLine3\\Not the 4th line!", $result->value);
+
+    }
+
     function testReadMappedProperty() {
 
         $data = "DTSTART:20110529";
@@ -82,6 +93,18 @@ class Sabre_VObject_ReaderTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals('20110529', $result->value);
 
     }
+
+    function testReadMappedPropertyGrouped() {
+
+        $data = "foo.DTSTART:20110529";
+        $result = Sabre_VObject_Reader::read($data);
+
+        $this->assertInstanceOf('Sabre_VObject_Property_DateTime', $result);
+        $this->assertEquals('DTSTART', $result->name);
+        $this->assertEquals('20110529', $result->value);
+
+    }
+
 
     /**
      * @expectedException Sabre_VObject_ParseException
@@ -206,6 +229,20 @@ class Sabre_VObject_ReaderTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals(1, count($result->parameters));
         $this->assertEquals('PARAMNAME', $result->parameters[0]->name);
         $this->assertEquals('paramvalue', $result->parameters[0]->value);
+
+    }
+    function testReadPropertyParameterNewLines() {
+
+        $data = "PROPNAME;PARAMNAME=paramvalue1\\nvalue2\\\\nvalue3:propValue";
+        $result = Sabre_VObject_Reader::read($data);
+
+        $this->assertInstanceOf('Sabre_VObject_Property', $result);
+        $this->assertEquals('PROPNAME', $result->name);
+        $this->assertEquals('propValue', $result->value);
+
+        $this->assertEquals(1, count($result->parameters));
+        $this->assertEquals('PARAMNAME', $result->parameters[0]->name);
+        $this->assertEquals("paramvalue1\nvalue2\\nvalue3", $result->parameters[0]->value);
 
     }
 

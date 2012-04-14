@@ -10,3 +10,5 @@ calendarserver.php
 groupwareserver.php
 package.xml
 tmpdata
+tests/temp
+*.swp

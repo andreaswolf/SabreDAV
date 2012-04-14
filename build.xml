@@ -50,6 +50,7 @@
         <copy todir="build/Sabre_DAV" includeemptydirs="true" >
             <fileset dir="lib">
                 <include name="Sabre/DAV/**" />
+                <exclude name="Sabre/DAVACL/**" />
                 <include name="Sabre.includes.php" />
             </fileset>
         </copy>
@@ -178,11 +179,13 @@
         <copy todir="build/SabreDAV" includeemptydirs="true">
             <fileset dir=".">
                 <include name="lib/**/*.php" />
+                <include name="lib/Sabre/DAV/Browser/assets/**" />
                 <include name="ChangeLog" />
                 <include name="LICENSE" />
                 <include name="examples/**.php" />
                 <include name="examples/**/*.sql" />
                 <include name="bin/naturalselection.py" />
+                <include name="bin/migrateto17.php" />
                 <include name="tests/**/*.xml" />
                 <include name="tests/**/*.php" />
             </fileset>
@@ -200,7 +203,7 @@
 
     <target name="release" depends="init,clean,test,build">
         <echo>Creating Git release tag</echo>
-        <exec command="git tag version-${sabredav.version}" checkreturn="false" passthru="1" />
+        <exec command="git tag ${sabredav.version}" checkreturn="false" passthru="1" />
         <echo>Uploading to Google Code</echo>
         <propertyprompt propertyName="googlecode.username" promptText="Enter your googlecode username" useExistingValue="true" />
         <propertyprompt propertyName="googlecode.password" promptText="Enter your googlecode password" useExistingValue="true" />

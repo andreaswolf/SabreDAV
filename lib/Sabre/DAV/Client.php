@@ -10,8 +10,8 @@
  *
  * @package Sabre
  * @subpackage DAVClient
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
- * @author Evert Pot (http://www.rooftopsolutions.nl/)
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @author Evert Pot (http://www.rooftopsolutions.nl/) 
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
 class Sabre_DAV_Client {
@@ -251,7 +251,11 @@ class Sabre_DAV_Client {
             // specs...) cURL does unfortunately return an error in this case ("transfer closed transfer closed with
             // ... bytes remaining to read") this can be circumvented by explicitly telling cURL to ignore the
             // response body
-            CURLOPT_NOBODY => ($method == 'HEAD')
+            CURLOPT_NOBODY => ($method == 'HEAD'),
+
+            // Automatically follow redirects
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
         );
 
         // Stream request body from a resource

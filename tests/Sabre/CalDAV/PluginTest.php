@@ -7,9 +7,18 @@ require_once 'Sabre/DAVACL/MockPrincipalBackend.php';
 
 class Sabre_CalDAV_PluginTest extends PHPUnit_Framework_TestCase {
 
+    /**
+     * @var Sabre_DAV_Server
+     */
     protected $server;
+    /**
+     * @var Sabre_CalDAV_Plugin
+     */
     protected $plugin;
     protected $response;
+    /**
+     * @var Sabre_CalDAV_Backend_PDO
+     */
     protected $caldavBackend;
 
     function setup() {
@@ -385,6 +394,7 @@ END:VCALENDAR';
 
         $props = $this->server->getPropertiesForPath('/principals/user1',array(
             '{urn:ietf:params:xml:ns:caldav}calendar-home-set',
+            '{urn:ietf:params:xml:ns:caldav}schedule-outbox-URL',
             '{urn:ietf:params:xml:ns:caldav}calendar-user-address-set',
             '{' . Sabre_CalDAV_Plugin::NS_CALENDARSERVER . '}calendar-proxy-read-for',
             '{' . Sabre_CalDAV_Plugin::NS_CALENDARSERVER . '}calendar-proxy-write-for',
@@ -392,12 +402,17 @@ END:VCALENDAR';
 
         $this->assertArrayHasKey(0,$props);
         $this->assertArrayHasKey(200,$props[0]);
+
+
         $this->assertArrayHasKey('{urn:ietf:params:xml:ns:caldav}calendar-home-set',$props[0][200]);
-
-
         $prop = $props[0][200]['{urn:ietf:params:xml:ns:caldav}calendar-home-set'];
         $this->assertTrue($prop instanceof Sabre_DAV_Property_Href);
         $this->assertEquals('calendars/user1/',$prop->getHref());
+
+        $this->assertArrayHasKey('{urn:ietf:params:xml:ns:caldav}schedule-outbox-URL',$props[0][200]);
+        $prop = $props[0][200]['{urn:ietf:params:xml:ns:caldav}schedule-outbox-URL'];
+        $this->assertTrue($prop instanceof Sabre_DAV_Property_Href);
+        $this->assertEquals('calendars/user1/outbox',$prop->getHref());
 
         $this->assertArrayHasKey('{urn:ietf:params:xml:ns:caldav}calendar-user-address-set',$props[0][200]);
         $prop = $props[0][200]['{urn:ietf:params:xml:ns:caldav}calendar-user-address-set'];
@@ -485,7 +500,7 @@ END:VCALENDAR';
         $this->server->httpRequest = $request;
         $this->server->exec();
 
-        $this->assertEquals('HTTP/1.1 207 Multi-Status',$this->response->status);
+        $this->assertEquals('HTTP/1.1 207 Multi-Status',$this->response->status,'Invalid HTTP status received. Full response body: ' . $this->response->body);
 
         $xml = simplexml_load_string(Sabre_DAV_XMLUtil::convertDAVNamespace($this->response->body));
 
@@ -514,6 +529,70 @@ END:VCALENDAR';
 
         }
 
+        // The response object should have a reference to the Asia/Seoul
+        // timezone.
+        $this->assertTrue(strpos($this->response->body,'Asia/Seoul')!==false);
+
+    }
+
+    /**
+     * @depends testCalendarMultiGetReport
+     */
+    function testCalendarMultiGetReportExpand() {
+
+        $body =
+            '<?xml version="1.0"?>' .
+            '<c:calendar-multiget xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
+            '<d:prop>' .
+            '  <c:calendar-data>' .
+            '     <c:expand start="20110101T000000Z" end="20111231T235959Z" />' .
+            '  </c:calendar-data>' .
+            '  <d:getetag />' .
+            '</d:prop>' .
+            '<d:href>/calendars/user1/UUID-123467/UUID-2345</d:href>' .
+            '</c:calendar-multiget>';
+
+        $request = new Sabre_HTTP_Request(array(
+            'REQUEST_METHOD' => 'REPORT',
+            'REQUEST_URI'    => '/calendars/user1',
+            'HTTP_DEPTH'     => '1',
+        ));
+        $request->setBody($body);
+
+        $this->server->httpRequest = $request;
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 207 Multi-Status',$this->response->status,'Invalid HTTP status received. Full response body: ' . $this->response->body);
+
+        $xml = simplexml_load_string(Sabre_DAV_XMLUtil::convertDAVNamespace($this->response->body));
+
+        $xml->registerXPathNamespace('d','urn:DAV');
+        $xml->registerXPathNamespace('c','urn:ietf:params:xml:ns:caldav');
+
+        $check = array(
+            '/d:multistatus',
+            '/d:multistatus/d:response',
+            '/d:multistatus/d:response/d:href',
+            '/d:multistatus/d:response/d:propstat',
+            '/d:multistatus/d:response/d:propstat/d:prop',
+            '/d:multistatus/d:response/d:propstat/d:prop/d:getetag',
+            '/d:multistatus/d:response/d:propstat/d:prop/c:calendar-data',
+            '/d:multistatus/d:response/d:propstat/d:status' => 'HTTP/1.1 200 OK',
+        );
+
+        foreach($check as $v1=>$v2) {
+
+            $xpath = is_int($v1)?$v2:$v1;
+
+            $result = $xml->xpath($xpath);
+            $this->assertEquals(1,count($result));
+
+            if (!is_int($v1)) $this->assertEquals($v2,(string)$result[0]);
+
+        }
+        // The response object should no longer hold references to timezones.
+        $this->assertTrue(strpos($this->response->body,'Asia/Seoul')===false);
+
     }
 
     /**
@@ -526,7 +605,9 @@ END:VCALENDAR';
             '<?xml version="1.0"?>' .
             '<c:calendar-query xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
             '<d:prop>' .
-            '  <c:calendar-data />' .
+            '  <c:calendar-data>' .
+            '     <c:expand start="20000101T000000Z" end="20101231T235959Z" />' .
+            '  </c:calendar-data>' .
             '  <d:getetag />' .
             '</d:prop>' .
             '<c:filter>' .
@@ -538,7 +619,7 @@ END:VCALENDAR';
 
         $request = new Sabre_HTTP_Request(array(
             'REQUEST_METHOD' => 'REPORT',
-            'REQUEST_URI'    => '/calendars/user1//UUID-123467',
+            'REQUEST_URI'    => '/calendars/user1/UUID-123467',
             'HTTP_DEPTH'     => '1',
         ));
         $request->setBody($body);
@@ -662,6 +743,128 @@ END:VCALENDAR';
 
     }
 
+    /**
+     * @depends testSupportedReportSetProperty
+     * @depends testCalendarMultiGetReport
+     */
+    function testCalendarQueryReport1Object() {
+
+        $body =
+            '<?xml version="1.0"?>' .
+            '<c:calendar-query xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
+            '<d:prop>' .
+            '  <c:calendar-data>' .
+            '     <c:expand start="20000101T000000Z" end="20101231T235959Z" />' .
+            '  </c:calendar-data>' . 
+            '  <d:getetag />' .
+            '</d:prop>' .
+            '<c:filter>' .
+            '  <c:comp-filter name="VCALENDAR">' .
+            '    <c:comp-filter name="VEVENT" />' .
+            '  </c:comp-filter>' .
+            '</c:filter>' .
+            '</c:calendar-query>';
+
+        $request = new Sabre_HTTP_Request(array(
+            'REQUEST_METHOD' => 'REPORT',
+            'REQUEST_URI'    => '/calendars/user1/UUID-123467/UUID-2345',
+            'HTTP_DEPTH'     => '0',
+        ));
+        $request->setBody($body);
+
+        $this->server->httpRequest = $request;
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 207 Multi-Status',$this->response->status,'Received an unexpected status. Full response body: ' . $this->response->body);
+
+        $xml = simplexml_load_string(Sabre_DAV_XMLUtil::convertDAVNamespace($this->response->body));
+
+        $xml->registerXPathNamespace('d','urn:DAV');
+        $xml->registerXPathNamespace('c','urn:ietf:params:xml:ns:caldav');
+
+        $check = array(
+            '/d:multistatus',
+            '/d:multistatus/d:response',
+            '/d:multistatus/d:response/d:href',
+            '/d:multistatus/d:response/d:propstat',
+            '/d:multistatus/d:response/d:propstat/d:prop',
+            '/d:multistatus/d:response/d:propstat/d:prop/d:getetag',
+            '/d:multistatus/d:response/d:propstat/d:prop/c:calendar-data',
+            '/d:multistatus/d:response/d:propstat/d:status' => 'HTTP/1.1 200 OK',
+        );
+
+        foreach($check as $v1=>$v2) {
+
+            $xpath = is_int($v1)?$v2:$v1;
+
+            $result = $xml->xpath($xpath);
+            $this->assertEquals(1,count($result), 'We expected 1 ' . $xpath . ' elements. We\'ve found ' . count($result) . '. Full result: ' . $this->response->body);
+
+            if (!is_int($v1)) $this->assertEquals($v2,(string)$result[0]);
+
+        }
+
+    }
+
+    /**
+     * @depends testSupportedReportSetProperty
+     * @depends testCalendarMultiGetReport
+     */
+    function testCalendarQueryReport1ObjectNoCalData() {
+
+        $body =
+            '<?xml version="1.0"?>' .
+            '<c:calendar-query xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
+            '<d:prop>' .
+            '  <d:getetag />' .
+            '</d:prop>' .
+            '<c:filter>' .
+            '  <c:comp-filter name="VCALENDAR">' .
+            '    <c:comp-filter name="VEVENT" />' .
+            '  </c:comp-filter>' .
+            '</c:filter>' .
+            '</c:calendar-query>';
+
+        $request = new Sabre_HTTP_Request(array(
+            'REQUEST_METHOD' => 'REPORT',
+            'REQUEST_URI'    => '/calendars/user1/UUID-123467/UUID-2345',
+            'HTTP_DEPTH'     => '0',
+        ));
+        $request->setBody($body);
+
+        $this->server->httpRequest = $request;
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 207 Multi-Status',$this->response->status,'Received an unexpected status. Full response body: ' . $this->response->body);
+
+        $xml = simplexml_load_string(Sabre_DAV_XMLUtil::convertDAVNamespace($this->response->body));
+
+        $xml->registerXPathNamespace('d','urn:DAV');
+        $xml->registerXPathNamespace('c','urn:ietf:params:xml:ns:caldav');
+
+        $check = array(
+            '/d:multistatus',
+            '/d:multistatus/d:response',
+            '/d:multistatus/d:response/d:href',
+            '/d:multistatus/d:response/d:propstat',
+            '/d:multistatus/d:response/d:propstat/d:prop',
+            '/d:multistatus/d:response/d:propstat/d:prop/d:getetag',
+            '/d:multistatus/d:response/d:propstat/d:status' => 'HTTP/1.1 200 OK',
+        );
+
+        foreach($check as $v1=>$v2) {
+
+            $xpath = is_int($v1)?$v2:$v1;
+
+            $result = $xml->xpath($xpath);
+            $this->assertEquals(1,count($result), 'We expected 1 ' . $xpath . ' elements. We\'ve found ' . count($result) . '. Full result: ' . $this->response->body);
+
+            if (!is_int($v1)) $this->assertEquals($v2,(string)$result[0]);
+
+        }
+
+    }
+
     function testHTMLActionsPanel() {
 
         $output = '';
@@ -696,4 +899,96 @@ END:VCALENDAR';
 
     }
 
+    /**
+     * @depends testCalendarMultiGetReport
+     */
+    function testCalendarMultiGetReportNoEnd() {
+
+        $body =
+            '<?xml version="1.0"?>' .
+            '<c:calendar-multiget xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
+            '<d:prop>' .
+            '  <c:calendar-data>' .
+            '     <c:expand start="20110101T000000Z" />' .
+            '  </c:calendar-data>' .
+            '  <d:getetag />' .
+            '</d:prop>' .
+            '<d:href>/calendars/user1/UUID-123467/UUID-2345</d:href>' .
+            '</c:calendar-multiget>';
+
+        $request = new Sabre_HTTP_Request(array(
+            'REQUEST_METHOD' => 'REPORT',
+            'REQUEST_URI'    => '/calendars/user1',
+            'HTTP_DEPTH'     => '1',
+        ));
+        $request->setBody($body);
+
+        $this->server->httpRequest = $request;
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 400 Bad request',$this->response->status,'Invalid HTTP status received. Full response body: ' . $this->response->body);
+
+    }
+
+    /**
+     * @depends testCalendarMultiGetReport
+     */
+    function testCalendarMultiGetReportNoStart() {
+
+        $body =
+            '<?xml version="1.0"?>' .
+            '<c:calendar-multiget xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
+            '<d:prop>' .
+            '  <c:calendar-data>' .
+            '     <c:expand end="20110101T000000Z" />' .
+            '  </c:calendar-data>' .
+            '  <d:getetag />' .
+            '</d:prop>' .
+            '<d:href>/calendars/user1/UUID-123467/UUID-2345</d:href>' .
+            '</c:calendar-multiget>';
+
+        $request = new Sabre_HTTP_Request(array(
+            'REQUEST_METHOD' => 'REPORT',
+            'REQUEST_URI'    => '/calendars/user1',
+            'HTTP_DEPTH'     => '1',
+        ));
+        $request->setBody($body);
+
+        $this->server->httpRequest = $request;
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 400 Bad request',$this->response->status,'Invalid HTTP status received. Full response body: ' . $this->response->body);
+
+    }
+
+    /**
+     * @depends testCalendarMultiGetReport
+     */
+    function testCalendarMultiGetReportEndBeforeStart() {
+
+        $body =
+            '<?xml version="1.0"?>' .
+            '<c:calendar-multiget xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:d="DAV:">' .
+            '<d:prop>' .
+            '  <c:calendar-data>' .
+            '     <c:expand start="20200101T000000Z" end="20110101T000000Z" />' .
+            '  </c:calendar-data>' .
+            '  <d:getetag />' .
+            '</d:prop>' .
+            '<d:href>/calendars/user1/UUID-123467/UUID-2345</d:href>' .
+            '</c:calendar-multiget>';
+
+        $request = new Sabre_HTTP_Request(array(
+            'REQUEST_METHOD' => 'REPORT',
+            'REQUEST_URI'    => '/calendars/user1',
+            'HTTP_DEPTH'     => '1',
+        ));
+        $request->setBody($body);
+
+        $this->server->httpRequest = $request;
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 400 Bad request',$this->response->status,'Invalid HTTP status received. Full response body: ' . $this->response->body);
+
+    }
 }

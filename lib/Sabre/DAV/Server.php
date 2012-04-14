@@ -5,14 +5,14 @@
  *
  * @package Sabre
  * @subpackage DAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
 class Sabre_DAV_Server {
 
     /**
-     * Inifinity is used for some request supporting the HTTP Depth header and indicates that the operation should traverse the entire tree
+     * Infinity is used for some request supporting the HTTP Depth header and indicates that the operation should traverse the entire tree
      */
     const DEPTH_INFINITY = -1;
 
@@ -25,9 +25,6 @@ class Sabre_DAV_Server {
      * Nodes that are directories, should use this value as the type property
      */
     const NODE_DIRECTORY = 2;
-
-    const PROP_SET = 1;
-    const PROP_REMOVE = 2;
 
     /**
      * XML namespace for all SabreDAV related elements
@@ -142,6 +139,15 @@ class Sabre_DAV_Server {
         'Sabre_DAV_ICollection' => '{DAV:}collection',
     );
 
+    /**
+     * If this setting is turned off, SabreDAV's version number will be hidden
+     * from various places.
+     *
+     * Some people feel this is a good security measure.
+     *
+     * @var bool
+     */
+    static public $exposeVersion = true;
 
     /**
      * Sets up the server
@@ -156,7 +162,7 @@ class Sabre_DAV_Server {
      * If an array is passed, we automatically create a root node, and use
      * the nodes in the array as top-level children.
      *
-     * @param Sabre_DAV_Tree|Sabre_DAV_INode|null $treeOrNode The tree object
+     * @param Sabre_DAV_Tree|Sabre_DAV_INode|array|null $treeOrNode The tree object
      */
     public function __construct($treeOrNode = null) {
 
@@ -217,7 +223,9 @@ class Sabre_DAV_Server {
                 $error->appendChild($DOM->createElement('s:stacktrace',$e->getTraceAsString()));
 
             }
-            $error->appendChild($DOM->createElement('s:sabredav-version',Sabre_DAV_Version::VERSION));
+            if (self::$exposeVersion) {
+                $error->appendChild($DOM->createElement('s:sabredav-version',Sabre_DAV_Version::VERSION));
+            }
 
             if($e instanceof Sabre_DAV_Exception) {
 
@@ -360,7 +368,6 @@ class Sabre_DAV_Server {
     }
 
 
-
     /**
      * Subscribe to an event.
      *
@@ -479,7 +486,9 @@ class Sabre_DAV_Server {
         $this->httpResponse->setHeader('DAV',implode(', ',$features));
         $this->httpResponse->setHeader('MS-Author-Via','DAV');
         $this->httpResponse->setHeader('Accept-Ranges','bytes');
-        $this->httpResponse->setHeader('X-Sabre-Version',Sabre_DAV_Version::VERSION);
+        if (self::$exposeVersion) {
+            $this->httpResponse->setHeader('X-Sabre-Version',Sabre_DAV_Version::VERSION);
+        }
         $this->httpResponse->setHeader('Content-Length',0);
         $this->httpResponse->sendStatus(200);
 
@@ -650,6 +659,7 @@ class Sabre_DAV_Server {
 
         if (!$this->broadcastEvent('beforeUnbind',array($uri))) return;
         $this->tree->delete($uri);
+        $this->broadcastEvent('afterUnbind',array($uri));
 
         $this->httpResponse->sendStatus(204);
         $this->httpResponse->setHeader('Content-Length','0');
@@ -728,7 +738,7 @@ class Sabre_DAV_Server {
      *
      * This HTTP method updates a file, or creates a new one.
      *
-     * If a new resource was created, a 201 Created status code should be returned. If an existing resource is updated, it's a 200 Ok
+     * If a new resource was created, a 201 Created status code should be returned. If an existing resource is updated, it's a 204 No Content
      *
      * @param string $uri
      * @return bool
@@ -816,22 +826,27 @@ class Sabre_DAV_Server {
 
             // If the node is a collection, we'll deny it
             if (!($node instanceof Sabre_DAV_IFile)) throw new Sabre_DAV_Exception_Conflict('PUT is not allowed on non-files.');
-            if (!$this->broadcastEvent('beforeWriteContent',array($uri))) return false;
+            if (!$this->broadcastEvent('beforeWriteContent',array($uri, $node, &$body))) return false;
 
-            $node->put($body);
+            $etag = $node->put($body);
+
+            $this->broadcastEvent('afterWriteContent',array($uri, $node));
 
             $this->httpResponse->setHeader('Content-Length','0');
+            if ($etag) $this->httpResponse->setHeader('ETag',$etag);
             $this->httpResponse->sendStatus(204);
 
         } else {
 
+            $etag = null;
             // If we got here, the resource didn't exist yet.
-            if (!$this->createFile($this->getRequestUri(),$body)) {
+            if (!$this->createFile($this->getRequestUri(),$body,$etag)) {
                 // For one reason or another the file was not created.
                 return;
             }
 
             $this->httpResponse->setHeader('Content-Length','0');
+            if ($etag) $this->httpResponse->setHeader('ETag', $etag);
             $this->httpResponse->sendStatus(201);
 
         }
@@ -912,7 +927,7 @@ class Sabre_DAV_Server {
      * This method moves one uri to a different uri. A lot of the actual request processing is done in getCopyMoveInfo
      *
      * @param string $uri
-     * @return void
+     * @return bool
      */
     protected function httpMove($uri) {
 
@@ -926,12 +941,14 @@ class Sabre_DAV_Server {
 
             if (!$this->broadcastEvent('beforeUnbind',array($moveInfo['destination']))) return false;
             $this->tree->delete($moveInfo['destination']);
+            $this->broadcastEvent('afterUnbind',array($moveInfo['destination']));
 
         }
 
         if (!$this->broadcastEvent('beforeUnbind',array($uri))) return false;
         if (!$this->broadcastEvent('beforeBind',array($moveInfo['destination']))) return false;
         $this->tree->move($uri,$moveInfo['destination']);
+        $this->broadcastEvent('afterUnbind',array($uri));
         $this->broadcastEvent('afterBind',array($moveInfo['destination']));
 
         // If a resource was overwritten we should send a 204, otherwise a 201
@@ -1447,22 +1464,26 @@ class Sabre_DAV_Server {
      *
      * This method will return true if the file was actually created
      *
-     * @param string $uri
+     * @param string   $uri
      * @param resource $data
+     * @param string   $etag
      * @return bool
      */
-    public function createFile($uri,$data) {
+    public function createFile($uri,$data, &$etag = null) {
 
         list($dir,$name) = Sabre_DAV_URLUtil::splitPath($uri);
 
         if (!$this->broadcastEvent('beforeBind',array($uri))) return false;
-        if (!$this->broadcastEvent('beforeCreateFile',array($uri,&$data))) return false;
 
         $parent = $this->tree->getNodeForPath($dir);
-        $parent->createFile($name,$data);
+
+        if (!$this->broadcastEvent('beforeCreateFile',array($uri, &$data, $parent))) return false;
+
+        $etag = $parent->createFile($name,$data);
         $this->tree->markDirty($dir);
 
         $this->broadcastEvent('afterBind',array($uri));
+        $this->broadcastEvent('afterCreateFile',array($uri, $parent));
 
         return true;
     }

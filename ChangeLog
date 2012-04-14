@@ -1,21 +1,78 @@
-1.6.0-alpha1 (201?-??-??)
+1.7.0-alpha (2012-??-??)
+    * BC Break: The calendarobjects database table has a bunch of new fields,
+	  and a migration script is required to ensure everything will keep
+	  working. Read the wiki for more details. 
+	* BC Break: The iCalendar interface now has a new method: calendarQuery.
+	* Changed: Responsibility for dealing with the calendar-query is now moved
+	  from the CalDAV plugin to the CalDAV backends. This allows for heavy
+	  optimizations.
+	* Changed: The CalDAV PDO backend is now a lot faster for common calendar
+	  queries. 
+	* Fixed: Marking both the text/calendar and text/x-vcard as UTF-8 encoded.
+	* Fixed: Workaround for the SOGO connector, as it doesn't understand
+	  receiving "text/x-vcard; charset=utf-8" for a contenttype.
+
+1.6.2-stable (2012-??-??)
+	* Fixed: Sabre_VObject_Node::$parent should have been public.
+	* Fixed: Recurrence rules of events are now taken into consideration when
+	  doing time-range queries on alarms.
+	* Fixed: Added a workaround for the fact that php's DateInterval cannot
+	  parse weeks and days at the same time.
+	* Added: Sabre_DAV_Server::$exposeVersion, allowing you to hide SabreDAV's
+	  version number from various outputs.
+	* Fixed: DTSTART values would be incorrect when expanding events.
+	* Fixed: DTSTART and DTEND would be incorrect for expansion of WEEKLY
+	  BYDAY recurrences.
+	* Fixed: Issue 203: A problem with overridden events hitting the exact
+	  date and time of a subsequent event in the recurrence set.
+	* Fixed: There was a problem with recurrence rules, for example the 5th
+	  tuesday of the month, if this day did not exist.
+
+1.6.1-stable (2012-03-05)
+	* Added: createFile and put() can now return an ETag.
+	* Added: Sending back an ETag on for operations on CardDAV backends. This
+	  should help with OS X 10.6 Addressbook compatibility.
+	* Fixed: Fixed a bug where an infinite loop could occur in the recurrence
+	  iterator if the recurrence was YEARLY, with a BYMONTH rule, and either
+	  BYDAY or BYMONTHDAY match the first day of the month.
+	* Fixed: Events that are excluded using EXDATE are still counted in the
+	  COUNT= parameter in the RRULE property.
+	* Added: Support for time-range filters on VALARM components.
+	* Fixed: Correctly filtering all-day events.
+	* Fixed: Sending back correct mimetypes from the browser plugin (thanks
+	  Jürgen).
+	* Fixed: Issue 195: Sabre_CardDAV pear package had an incorrect dependency.
+	* Fixed: Calendardata would be destroyed when performing a MOVE request.
+
+1.6.0-stable (2012-02-22)
 	* BC Break: Now requires PHP 5.3
 	* BC Break: Any node that implemented Sabre_DAVACL_IACL must now also
 	  implement the getSupportedPrivilegeSet method. See website for details.
 	* BC Break: Moved functions from Sabre_CalDAV_XMLUtil to
 	  Sabre_VObject_DateTimeParser.
-	* BC Break: The Sabre_DAVACL_IPrincipalCollection now has a new method:
-	  'searchPrincipals'.
+	* BC Break: The Sabre_DAVACL_IPrincipalCollection now has two new methods:
+	  'searchPrincipals' and 'updatePrincipal'.
 	* BC Break: Sabre_DAV_ILockable is removed and all related per-node
 	  locking functionality.
 	* BC Break: Sabre_DAV_Exception_FileNotFound is now deprecated in favor of
 	  Sabre_DAV_Exception_NotFound. The former will be removed in a later
 	  version.
+	* BC Break: Removed Sabre_CalDAV_ICalendarUtil, use Sabre_VObject instead.
+	* BC Break: Sabre_CalDAV_Server is now deprecated, check out the
+	  documentation on how to setup a caldav server with just
+	  Sabre_DAV_Server.
+	* BC Break: Default Principals PDO backend now needs a new field in the
+	  'principals' table. See the website for details.
 	* Added: Ability to create new calendars and addressbooks from within the
 	  browser plugin.
 	* Added: Browser plugin: icons for various nodes.
 	* Added: Support for FREEBUSY reports!
+	* Added: Support for creating principals with admin-level privileges.
+	* Added: Possibility to let server send out invitation emails on behalf of
+	  CalDAV client, using Sabre_CalDAV_Schedule_IMip.
 	* Changed: beforeCreateFile event now passes data argument by reference.
+	* Changed: The 'propertyMap' property from Sabre_VObject_Reader, must now
+	  be specified in Sabre_VObject_Property::$classMap.
 	* Added: Ability for plugins to tell the ACL plugin which principal
 	  plugins are searchable.
 	* Added: [DAVACL] Per-node overriding of supported privileges. This allows
@@ -28,6 +85,10 @@
 	* Added: An includes.php file in every sub-package (CalDAV, CardDAV, DAV,
 	  DAVACL, HTTP, VObject) as an alternative to the autoloader. This often
 	  works much faster.
+	* Added: Support for the 'Me card', which allows Addressbook.app users
+	  specify which vcard is their own.
+	* Added: Support for updating principal properties in the DAVACL principal
+	  backends.
 	* Changed: Major refactoring in the calendar-query REPORT code. Should
 	  make things more flexible and correct.
 	* Changed: The calendar-proxy-[read|write] principals will now only appear
@@ -57,6 +118,58 @@
 	* Added: Some mysql unique constraints to example files.
 	* Fixed: Correctly formatting HTTP dates.
 	* Fixed: Issue 94: Sending back Last-Modified header for 304 responses.
+	* Added: Sabre_VObject_Component_VEvent, Sabre_VObject_Component_VJournal,
+	  Sabre_VObject_Component_VTodo and Sabre_VObject_Component_VCalendar.
+	* Changed: Properties are now also automatically mapped to their
+	  appropriate classes, if they are created using the add() or __set()
+	  methods.
+	* Changed: Cloning VObject objects now clones the entire tree, rather than
+      just the default shallow copy.
+	* Added: Support for recurrence expansion in the CALDAV:calendar-multiget
+	  and CALDAV:calendar-query REPORTS.
+	* Changed: CalDAV PDO backend now sorts calendars based on the internal
+	  'calendarorder' field.
+	* Added: Issue 181: Carddav backends may no optionally not supply the carddata in
+	  getCards, if etag and size are specified. This may speed up certain
+	  requests.
+	* Added: More arguments to beforeWriteContent and beforeCreateFile (see
+	  WritingPlugins wiki document).
+	* Added: Hook for iCalendar validation. This allows us to validate
+	  iCalendar objects when they're uploaded. At the moment we're just
+	  validating syntax.
+	* Added: VObject now support Windows Timezone names correctly (thanks
+	  mrpace2).
+	* Added: If a timezonename could not be detected, we fall back on the
+	  default PHP timezone.
+	* Added: Now a Composer package (thanks willdurand).
+	* Fixed: Support for \N as a newline character in the VObject reader.
+	* Added: afterWriteContent, afterCreateFile and afterUnbind events.
+	* Added: Postgresql example files. Not part of the unittests though, so
+	  use at your own risk.
+	* Fixed: Issue 182: Removed backticks from sql queries, so it will work
+	  with Postgres.
+
+1.5.8-stable (2012-02-22)
+	* Fixed: Issue 95: Another timezone parsing issue, this time in
+	  calendar-query.
+
+1.5.7-stable (2012-02-19)
+	* Fixed: VObject properties are now always encoded before components.
+	* Fixed: Sabre_DAVACL had issues with multiple levels of privilege
+	  aggregration.
+	* Changed: Added 'GuessContentType' plugin to fileserver.php example.
+	* Fixed: The Browser plugin will now trigger the correct events when
+	  creating files.
+	* Fixed: The ICSExportPlugin now considers ACL's.
+	* Added: Made it optional to supply carddata from an Addressbook backend
+	  when requesting getCards. This can make some operations much faster, and
+	  could result in much lower memory use.
+	* Fixed: Issue 187: Sabre_DAV_UUIDUtil was missing from includes file.
+	* Fixed: Issue 191: beforeUnlock was triggered twice.
+
+1.5.6-stable (2012-01-07)
+	* Fixed: Issue 174: VObject could break UTF-8 characters.
+	* Fixed: pear package installation issues.
 
 1.5.5-stable (2011-12-16)
 	* Fixed: CalDAV time-range filter workaround for recurring events.

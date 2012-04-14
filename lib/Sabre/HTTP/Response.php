@@ -4,8 +4,8 @@
  * Sabre_HTTP_Response
  *
  * @package Sabre
- * @subpackage HTTP
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @subpackage HTTP 
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -64,6 +64,9 @@ class Sabre_HTTP_Response {
             423 => 'Locked', // RFC 4918
             424 => 'Failed Dependency', // RFC 4918
             426 => 'Upgrade required',
+            428 => 'Precondition required', // draft-nottingham-http-new-status
+            429 => 'Too Many Requests', // draft-nottingham-http-new-status
+            431 => 'Request Header Fields Too Large', // draft-nottingham-http-new-status
             500 => 'Internal Server Error',
             501 => 'Not Implemented',
             502 => 'Bad Gateway',
@@ -75,6 +78,7 @@ class Sabre_HTTP_Response {
             508 => 'Loop Detected', // RFC 5842
             509 => 'Bandwidth Limit Exceeded', // non-standard
             510 => 'Not extended',
+            511 => 'Network Authentication Required', // draft-nottingham-http-new-status
        );
 
        return 'HTTP/1.1 ' . $code . ' ' . $msg[$code];

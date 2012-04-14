@@ -3,6 +3,7 @@ CREATE TABLE principals (
     uri VARCHAR(100) NOT NULL,
     email VARCHAR(80),
     displayname VARCHAR(80),
+    vcardurl VARCHAR(80),
     UNIQUE(uri)
 );
 
@@ -15,7 +16,7 @@ CREATE TABLE groupmembers (
 
 
 INSERT INTO principals (uri,email,displayname) VALUES
-('principals/admin', 'admin@example.org','Adminstrator'),
+('principals/admin', 'admin@example.org','Administrator'),
 ('principals/admin/calendar-proxy-read', null, null),
 ('principals/admin/calendar-proxy-write', null, null);
 

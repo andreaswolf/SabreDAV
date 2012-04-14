@@ -13,7 +13,7 @@
  *
  * @package Sabre
  * @subpackage DAVACL
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -182,16 +182,14 @@ class Sabre_DAVACL_Principal extends Sabre_DAV_Node implements Sabre_DAVACL_IPri
 
     /**
      * Updates this principals properties.
-     *
-     * Currently this is not supported
-     *
-     * @param array $properties
+     * 
+     * @param array $mutations
      * @see Sabre_DAV_IProperties::updateProperties
      * @return bool|array
      */
-    public function updateProperties($properties) {
+    public function updateProperties($mutations) {
 
-        return false;
+        return $this->principalBackend->updatePrincipal($this->principalProperties['uri'], $mutations);
 
     }
 
@@ -239,7 +237,7 @@ class Sabre_DAVACL_Principal extends Sabre_DAV_Node implements Sabre_DAVACL_IPri
         return array(
             array(
                 'privilege' => '{DAV:}read',
-                'principal' => '{DAV:}authenticated',
+                'principal' => $this->getPrincipalUrl(),
                 'protected' => true,
             ),
         );

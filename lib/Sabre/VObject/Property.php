@@ -13,7 +13,7 @@
  *
  * @package Sabre
  * @subpackage VObject
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -50,6 +50,51 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
     public $value;
 
     /**
+     * If properties are added to this map, they will be automatically mapped
+     * to their respective classes, if parsed by the reader or constructed with
+     * the 'create' method.
+     *
+     * @var array
+     */
+    static public $classMap = array(
+        'COMPLETED'     => 'Sabre_VObject_Property_DateTime',
+        'CREATED'       => 'Sabre_VObject_Property_DateTime',
+        'DTEND'         => 'Sabre_VObject_Property_DateTime',
+        'DTSTAMP'       => 'Sabre_VObject_Property_DateTime',
+        'DTSTART'       => 'Sabre_VObject_Property_DateTime',
+        'DUE'           => 'Sabre_VObject_Property_DateTime',
+        'EXDATE'        => 'Sabre_VObject_Property_MultiDateTime',
+        'LAST-MODIFIED' => 'Sabre_VObject_Property_DateTime',
+        'RECURRENCE-ID' => 'Sabre_VObject_Property_DateTime',
+        'TRIGGER'       => 'Sabre_VObject_Property_DateTime',
+    );
+
+    /**
+     * Creates the new property by name, but in addition will also see if
+     * there's a class mapped to the property name.
+     *
+     * @param string $name
+     * @param string $value
+     * @return Sabre_VObject_Property
+     */
+    static public function create($name, $value = null) {
+
+        $name = strtoupper($name);
+        $shortName = $name;
+        $group = null;
+        if (strpos($shortName,'.')!==false) {
+            list($group, $shortName) = explode('.', $shortName);
+        }
+
+        if (isset(self::$classMap[$shortName])) {
+            return new self::$classMap[$shortName]($name, $value);
+        } else {
+            return new self($name, $value);
+        }
+
+    }
+
+    /**
      * Creates a new property object
      *
      * By default this object will iterate over its own children, but this can
@@ -72,6 +117,8 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
         $this->setValue($value);
 
     }
+
+
 
     /**
      * Updates the internal value
@@ -115,8 +162,8 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
         $out = '';
         while(strlen($str)>0) {
             if (strlen($str)>75) {
-                $out.= substr($str,0,75) . "\r\n";
-                $str = ' ' . substr($str,75);
+                $out.= mb_strcut($str,0,75,'utf-8') . "\r\n";
+                $str = ' ' . mb_strcut($str,75,strlen($str),'utf-8');
             } else {
                 $out.=$str . "\r\n";
                 $str='';
@@ -167,7 +214,6 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
         }
 
     }
-
 
     /* ArrayAccess interface {{{ */
 
@@ -227,7 +273,7 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
      */
     public function offsetSet($name, $value) {
 
-        if (is_int($name)) return parent::offsetSet($name, $value);
+        if (is_int($name)) parent::offsetSet($name, $value);
 
         if (is_scalar($value)) {
             if (!is_string($name))
@@ -258,7 +304,7 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
      */
     public function offsetUnset($name) {
 
-        if (is_int($name)) return parent::offsetUnset($name);
+        if (is_int($name)) parent::offsetUnset($name);
         $name = strtoupper($name);
 
         foreach($this->parameters as $key=>$parameter) {
@@ -280,7 +326,22 @@ class Sabre_VObject_Property extends Sabre_VObject_Element {
      */
     public function __toString() {
 
-        return $this->value;
+        return (string)$this->value;
+
+    }
+
+    /**
+     * This method is automatically called when the object is cloned.
+     * Specifically, this will ensure all child elements are also cloned.
+     *
+     * @return void
+     */
+    public function __clone() {
+
+        foreach($this->parameters as $key=>$child) {
+            $this->parameters[$key] = clone $child;
+            $this->parameters[$key]->parent = $this;
+        }
 
     }
 

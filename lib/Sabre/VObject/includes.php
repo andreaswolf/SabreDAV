@@ -10,7 +10,7 @@
  *
  * @package Sabre
  * @subpackage VObject
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -25,11 +25,17 @@ include __DIR__ . '/ParseException.php';
 include __DIR__ . '/Reader.php';
 include __DIR__ . '/RecurrenceIterator.php';
 include __DIR__ . '/Version.php';
+include __DIR__ . '/WindowsTimezoneMap.php';
 include __DIR__ . '/Element.php';
 include __DIR__ . '/Property.php';
 include __DIR__ . '/Component.php';
 include __DIR__ . '/Property/DateTime.php';
 include __DIR__ . '/Property/MultiDateTime.php';
+include __DIR__ . '/Component/VAlarm.php';
+include __DIR__ . '/Component/VCalendar.php';
+include __DIR__ . '/Component/VEvent.php';
+include __DIR__ . '/Component/VJournal.php';
+include __DIR__ . '/Component/VTodo.php';
 include __DIR__ . '/Element/DateTime.php';
 include __DIR__ . '/Element/MultiDateTime.php';
 // End includes

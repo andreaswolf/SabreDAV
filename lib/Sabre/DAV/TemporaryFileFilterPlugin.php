@@ -22,7 +22,7 @@
  *
  * @package Sabre
  * @subpackage DAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -161,7 +161,7 @@ class Sabre_DAV_TemporaryFileFilterPlugin extends Sabre_DAV_ServerPlugin {
         foreach($this->temporaryFilePatterns as $tempFile) {
 
             if (preg_match($tempFile,$tempPath)) {
-                return $this->dataDir . '/sabredav_' . md5($path) . '.tempfile';
+                return $this->getDataDir() . '/sabredav_' . md5($path) . '.tempfile';
             }
 
         }
@@ -277,4 +277,13 @@ class Sabre_DAV_TemporaryFileFilterPlugin extends Sabre_DAV_ServerPlugin {
     }
 
 
+    /**
+     * This method returns the directory where the temporary files should be stored.
+     *
+     * @return string
+     */
+    protected function getDataDir()
+    {
+        return $this->dataDir;
+    }
 }

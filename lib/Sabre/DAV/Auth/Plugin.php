@@ -11,7 +11,7 @@
  *
  * @package Sabre
  * @subpackage DAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -27,7 +27,7 @@ class Sabre_DAV_Auth_Plugin extends Sabre_DAV_ServerPlugin {
     /**
      * Authentication backend
      *
-     * @var Sabre_DAV_Auth_Backend_Abstract
+     * @var Sabre_DAV_Auth_IBackend
      */
     private $authBackend;
 

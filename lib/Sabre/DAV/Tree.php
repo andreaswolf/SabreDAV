@@ -5,7 +5,7 @@
  *
  * @package Sabre
  * @subpackage DAV
- * @copyright Copyright (C) 2007-2011 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
@@ -13,10 +13,10 @@ abstract class Sabre_DAV_Tree {
 
     /**
      * This function must return an INode object for a path
-     * If a Path doesn't exist, thrown an Exception_FileNotFound
+     * If a Path doesn't exist, thrown a Exception_NotFound
      *
      * @param string $path
-     * @throws Exception_FileNotFound
+     * @throws Sabre_DAV_Exception_NotFound
      * @return Sabre_DAV_INode
      */
     abstract function getNodeForPath($path);

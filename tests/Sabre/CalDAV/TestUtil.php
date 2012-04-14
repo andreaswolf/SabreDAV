@@ -16,38 +16,35 @@ class Sabre_CalDAV_TestUtil {
 
         $pdo = new PDO('sqlite:' . SABRE_TEMPDIR . '/testdb.sqlite');
         $pdo->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
-        $pdo->query('
-CREATE TABLE calendarobjects (
-	id integer primary key asc,
-    calendardata text,
-    uri text,
-    calendarid integer,
-    lastmodified integer
-);
-');
 
-        $pdo->query('
-CREATE TABLE calendars (
-    id integer primary key asc,
-    principaluri text,
-    displayname text,
-    uri text,
-    ctag integer,
-    description text,
-	calendarorder integer,
-    calendarcolor text,
-    timezone text,
-    components text
-);');
-
-        $pdo->query('INSERT INTO calendars (principaluri,displayname,uri,description,calendarorder,calendarcolor,components)
-            VALUES ("principals/user1","user1 calendar","UUID-123467","Calendar description", "1", "#FF0000","VEVENT,VTODO");');
-        $pdo->query('INSERT INTO calendars (principaluri,displayname,uri,description,calendarorder,calendarcolor,components)
-            VALUES ("principals/user1","user1 calendar2","UUID-123468","Calendar description", "1", "#FF0000",NULL);');
-
-        $stmt = $pdo->prepare('INSERT INTO calendarobjects (calendardata, uri, calendarid, lastmodified) VALUES (?, "UUID-2345", 1, ?)');
-        $stmt->execute(array(self::getTestCalendarData(),time()));
-
+        // Yup this is definitely not 'fool proof', but good enough for now.
+        $queries = explode(';', file_get_contents(__DIR__ . '/../../../examples/sql/sqlite.calendars.sql'));
+        foreach($queries as $query) {
+            $pdo->exec($query);
+        }
+        // Inserting events through a backend class.
+        $backend = new Sabre_CalDAV_Backend_PDO($pdo);
+        $calendarId = $backend->createCalendar(
+            'principals/user1',
+            'UUID-123467',
+            array(
+                '{DAV:}displayname' => 'user1 calendar',
+                '{urn:ietf:params:xml:ns:caldav}calendar-description' => 'Calendar description',
+                '{http://apple.com/ns/ical/}calendar-order' => '1',
+                '{http://apple.com/ns/ical/}calendar-color' => '#FF0000',
+            )
+        );
+        $backend->createCalendar(
+            'principals/user1',
+            'UUID-123468',
+            array(
+                '{DAV:}displayname' => 'user1 calendar2',
+                '{urn:ietf:params:xml:ns:caldav}calendar-description' => 'Calendar description',
+                '{http://apple.com/ns/ical/}calendar-order' => '1',
+                '{http://apple.com/ns/ical/}calendar-color' => '#FF0000',
+            )
+        );
+        $backend->createCalendarObject($calendarId, 'UUID-2345', self::getTestCalendarData());
         return $pdo;
 
     }
