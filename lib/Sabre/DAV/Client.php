@@ -25,6 +25,11 @@ class Sabre_DAV_Client {
     protected $timeout = 10;
 
     /**
+     * @var Sabre_DAV_ClientObserverInterface[]
+     */
+    protected $observers = array();
+
+    /**
      * Constructor
      *
      * Settings are provided through the 'settings' argument. The following
@@ -330,7 +335,7 @@ class Sabre_DAV_Client {
         );
 
         foreach ($this->observers as $observer) {
-            $observer->notifyRequest($curlSettings, $response);
+            $observer->notifyAfterRequest($curlSettings, $response);
         }
 
         if (!empty($curlErrNo)) {
@@ -488,6 +493,10 @@ class Sabre_DAV_Client {
 
         return $propResult;
 
+    }
+
+    public function attachObserver(Sabre_DAV_ClientObserverInterface $observer) {
+        $this->observers[] = $observer;
     }
 
 }
