@@ -1,5 +1,7 @@
 <?php
 
+use Sabre\VObject;
+
 /**
  * CardDAV plugin
  *
@@ -53,6 +55,8 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
         $server->subscribeEvent('report', array($this,'report'));
         $server->subscribeEvent('onHTMLActionsPanel', array($this,'htmlActionsPanel'));
         $server->subscribeEvent('onBrowserPostAction', array($this,'browserPostAction'));
+        $server->subscribeEvent('beforeWriteContent', array($this, 'beforeWriteContent'));
+        $server->subscribeEvent('beforeCreateFile', array($this, 'beforeCreateFile'));
 
         /* Namespaces */
         $server->xmlNamespaces[self::NS_CARDDAV] = 'card';
@@ -152,8 +156,7 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
                 if (is_resource($val))
                     $val = stream_get_contents($val);
 
-                // Taking out \r to not screw up the xml output
-                $returnedProperties[200][$addressDataProp] = str_replace("\r","", $val);
+                $returnedProperties[200][$addressDataProp] = $val;
 
             }
         }
@@ -268,7 +271,7 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
 
         $properties = array_keys(Sabre_DAV_XMLUtil::parseProperties($dom->firstChild));
 
-        $hrefElems = $dom->getElementsByTagNameNS('urn:DAV','href');
+        $hrefElems = $dom->getElementsByTagNameNS('DAV:','href');
         $propertyList = array();
 
         foreach($hrefElems as $elem) {
@@ -283,6 +286,85 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
         $this->server->httpResponse->sendBody($this->server->generateMultiStatus($propertyList));
 
     }
+
+    /**
+     * This method is triggered before a file gets updated with new content.
+     *
+     * This plugin uses this method to ensure that Card nodes receive valid
+     * vcard data.
+     *
+     * @param string $path
+     * @param Sabre_DAV_IFile $node
+     * @param resource $data
+     * @return void
+     */
+    public function beforeWriteContent($path, Sabre_DAV_IFile $node, &$data) {
+
+        if (!$node instanceof Sabre_CardDAV_ICard)
+            return;
+
+        $this->validateVCard($data);
+
+    }
+
+    /**
+     * This method is triggered before a new file is created.
+     *
+     * This plugin uses this method to ensure that Card nodes receive valid
+     * vcard data.
+     *
+     * @param string $path
+     * @param resource $data
+     * @param Sabre_DAV_ICollection $parentNode
+     * @return void
+     */
+    public function beforeCreateFile($path, &$data, Sabre_DAV_ICollection $parentNode) {
+
+        if (!$parentNode instanceof Sabre_CardDAV_IAddressBook)
+            return;
+
+        $this->validateVCard($data);
+
+    }
+
+    /**
+     * Checks if the submitted iCalendar data is in fact, valid.
+     *
+     * An exception is thrown if it's not.
+     *
+     * @param resource|string $data
+     * @return void
+     */
+    protected function validateVCard(&$data) {
+
+        // If it's a stream, we convert it to a string first.
+        if (is_resource($data)) {
+            $data = stream_get_contents($data);
+        }
+
+        // Converting the data to unicode, if needed.
+        $data = Sabre_DAV_StringUtil::ensureUTF8($data);
+
+        try {
+
+            $vobj = VObject\Reader::read($data);
+
+        } catch (VObject\ParseException $e) {
+
+            throw new Sabre_DAV_Exception_UnsupportedMediaType('This resource only supports valid vcard data. Parse error: ' . $e->getMessage());
+
+        }
+
+        if ($vobj->name !== 'VCARD') {
+            throw new Sabre_DAV_Exception_UnsupportedMediaType('This collection can only support vcard objects.');
+        }
+
+        if (!isset($vobj->UID)) {
+            throw new Sabre_DAV_Exception_BadRequest('Every vcard must have an UID.');
+        }
+
+    }
+
 
     /**
      * This function handles the addressbook-query REPORT
@@ -361,7 +443,9 @@ class Sabre_CardDAV_Plugin extends Sabre_DAV_ServerPlugin {
      */
     public function validateFilters($vcardData, array $filters, $test) {
 
-        $vcard = Sabre_VObject_Reader::read($vcardData);
+        $vcard = VObject\Reader::read($vcardData);
+
+        if (!$filters) return true;
 
         foreach($filters as $filter) {
 

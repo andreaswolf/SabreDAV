@@ -207,6 +207,10 @@ class Sabre_DAV_Server {
 
         } catch (Exception $e) {
 
+            try {
+                $this->broadcastEvent('exception', array($e));
+            } catch (Exception $ignore) {
+            }
             $DOM = new DOMDocument('1.0','utf-8');
             $DOM->formatOutput = true;
 
@@ -508,7 +512,7 @@ class Sabre_DAV_Server {
 
         if (!$this->checkPreconditions(true)) return false;
 
-        if (!($node instanceof Sabre_DAV_IFile)) throw new Sabre_DAV_Exception_NotImplemented('GET is only implemented on File objects');
+        if (!$node instanceof Sabre_DAV_IFile) throw new Sabre_DAV_Exception_NotImplemented('GET is only implemented on File objects');
         $body = $node->get();
 
         // Converting string into stream, if needed.
@@ -1476,11 +1480,14 @@ class Sabre_DAV_Server {
         if (!$this->broadcastEvent('beforeBind',array($uri))) return false;
 
         $parent = $this->tree->getNodeForPath($dir);
+        if (!$parent instanceof Sabre_DAV_ICollection) {
+            throw new Sabre_DAV_Exception_Conflict('Files can only be created as children of collections');
+        }
 
         if (!$this->broadcastEvent('beforeCreateFile',array($uri, &$data, $parent))) return false;
 
         $etag = $parent->createFile($name,$data);
-        $this->tree->markDirty($dir);
+        $this->tree->markDirty($dir . '/' . $name);
 
         $this->broadcastEvent('afterBind',array($uri));
         $this->broadcastEvent('afterCreateFile',array($uri, $parent));
@@ -1784,7 +1791,14 @@ class Sabre_DAV_Server {
                     $etag = $node->getETag();
                     if ($etag===$ifMatchItem) {
                         $haveMatch = true;
+                    } else {
+                        // Evolution has a bug where it sometimes prepends the "
+                        // with a \. This is our workaround.
+                        if (str_replace('\\"','"', $ifMatchItem) === $etag) {
+                            $haveMatch = true;
+                        }
                     }
+
                 }
                 if (!$haveMatch) {
                      throw new Sabre_DAV_Exception_PreconditionFailed('An If-Match header was specified, but none of the specified the ETags matched.','If-Match');
@@ -1988,7 +2002,7 @@ class Sabre_DAV_Server {
         if (!$body) return array();
 
         $dom = Sabre_DAV_XMLUtil::loadDOMDocument($body);
-        $elem = $dom->getElementsByTagNameNS('urn:DAV','propfind')->item(0);
+        $elem = $dom->getElementsByTagNameNS('DAV:','propfind')->item(0);
         return array_keys(Sabre_DAV_XMLUtil::parseProperties($elem));
 
     }

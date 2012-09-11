@@ -9,7 +9,7 @@ class Sabre_DAV_ServerSimpleTest extends Sabre_DAV_AbstractServer{
     function testConstructArray() {
 
         $nodes = array(
-            new Sabre_DAV_SimpleDirectory('hello')
+            new Sabre_DAV_SimpleCollection('hello')
         );
 
         $server = new Sabre_DAV_Server($nodes);
@@ -23,7 +23,7 @@ class Sabre_DAV_ServerSimpleTest extends Sabre_DAV_AbstractServer{
     function testConstructIncorrectObj() {
 
         $nodes = array(
-            new Sabre_DAV_SimpleDirectory('hello'),
+            new Sabre_DAV_SimpleCollection('hello'),
             new STDClass(),
         );
 
@@ -208,6 +208,22 @@ class Sabre_DAV_ServerSimpleTest extends Sabre_DAV_AbstractServer{
         $this->assertEquals('HTTP/1.1 204 No Content',$this->response->status);
         $this->assertEquals('', $this->response->body);
         $this->assertEquals('Testing updated file',file_get_contents($this->tempDir . '/test.txt'));
+
+    }
+
+    function testPutNoParentCollection() {
+
+        $serverVars = array(
+            'REQUEST_URI'    => '/test.txt/item.txt',
+            'REQUEST_METHOD' => 'PUT',
+        );
+
+        $request = new Sabre_HTTP_Request($serverVars);
+        $request->setBody('Testing updated file');
+        $this->server->httpRequest = ($request);
+        $this->server->exec();
+
+        $this->assertEquals('HTTP/1.1 409 Conflict',$this->response->status);
 
     }
 

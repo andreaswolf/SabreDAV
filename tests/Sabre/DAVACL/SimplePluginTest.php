@@ -130,7 +130,7 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
 
         $tree = array(
 
-            new Sabre_DAV_SimpleDirectory('principals', array(
+            new Sabre_DAV_SimpleCollection('principals', array(
                 new Sabre_DAVACL_MockPrincipal('admin','principals/admin'),
             ))
 
@@ -154,7 +154,7 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
 
         $tree = array(
 
-            new Sabre_DAV_SimpleDirectory('principals', array(
+            new Sabre_DAV_SimpleCollection('principals', array(
                 new Sabre_DAVACL_MockPrincipal('admin','principals/admin',array('principals/administrators', 'principals/everyone')),
                 new Sabre_DAVACL_MockPrincipal('administrators','principals/administrators',array('principals/groups'), array('principals/admin')),
                 new Sabre_DAVACL_MockPrincipal('everyone','principals/everyone',array(), array('principals/admin')),
@@ -180,6 +180,9 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
             'principals/groups',
         );
 
+        $this->assertEquals($expected,$acl->getCurrentUserPrincipals());
+
+        // The second one should trigger the cache and be identical
         $this->assertEquals($expected,$acl->getCurrentUserPrincipals());
 
     }
@@ -231,7 +234,7 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
         $tree = array(
             new Sabre_DAVACL_MockACLNode('foo',$acl),
 
-            new Sabre_DAV_SimpleDirectory('principals', array(
+            new Sabre_DAV_SimpleCollection('principals', array(
                 new Sabre_DAVACL_MockPrincipal('admin','principals/admin'),
             )),
 
@@ -285,7 +288,7 @@ class Sabre_DAVACL_SimplePluginTest extends PHPUnit_Framework_TestCase {
         $tree = array(
             new Sabre_DAVACL_MockACLNode('foo',$acl),
 
-            new Sabre_DAV_SimpleDirectory('principals', array(
+            new Sabre_DAV_SimpleCollection('principals', array(
                 new Sabre_DAVACL_MockPrincipal('admin','principals/admin'),
             )),
 
