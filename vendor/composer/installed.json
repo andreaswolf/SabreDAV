@@ -1,0 +1,50 @@
+[
+    {
+        "name": "sabre/vobject",
+        "version": "dev-master",
+        "version_normalized": "9999999-dev",
+        "source": {
+            "type": "git",
+            "url": "https://github.com/evert/sabre-vobject",
+            "reference": "e80d79e8b2b7a1a73f2a5d5ead439a2538824ae5"
+        },
+        "dist": {
+            "type": "zip",
+            "url": "https://github.com/evert/sabre-vobject/zipball/e80d79e8b2b7a1a73f2a5d5ead439a2538824ae5",
+            "reference": "e80d79e8b2b7a1a73f2a5d5ead439a2538824ae5",
+            "shasum": ""
+        },
+        "require": {
+            "php": ">=5.3.1"
+        },
+        "time": "2012-09-07 14:48:03",
+        "bin": [
+            "bin/vobjectvalidate.php"
+        ],
+        "type": "library",
+        "installation-source": "source",
+        "autoload": {
+            "psr-0": {
+                "Sabre\\VObject": "lib/"
+            }
+        },
+        "license": [
+            "BSD-3-Clause"
+        ],
+        "authors": [
+            {
+                "name": "Evert Pot",
+                "email": "evert@rooftopsolutions.nl",
+                "homepage": "http://www.rooftopsolutions.nl/",
+                "role": "Developer"
+            }
+        ],
+        "description": "The VObject library for PHP allows you to easily parse and manipulate iCalendar and vCard objects",
+        "homepage": "https://github.com/evert/sabre-vobject",
+        "keywords": [
+            "iCalendar",
+            "VObject",
+            "vCard"
+        ]
+    }
+]
