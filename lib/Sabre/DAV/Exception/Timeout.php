@@ -1,5 +1,6 @@
 <?php
+namespace Sabre\DAV\Exception;
 
-class Sabre_DAV_Exception_Timeout extends Exception {
+class Timeout extends \Sabre\DAV\Exception {
 	//
 }

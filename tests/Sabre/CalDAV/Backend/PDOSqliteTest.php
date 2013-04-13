@@ -1,13 +1,29 @@
 <?php
 
+namespace Sabre\CalDAV\Backend;
+
+use Sabre\CalDAV;
+
 require_once 'Sabre/CalDAV/Backend/AbstractPDOTest.php';
 
-class Sabre_CalDAV_Backend_PDOSQLiteTest extends Sabre_CalDAV_Backend_AbstractPDOTest {
+class PDOSQLiteTest extends AbstractPDOTest {
 
     function setup() {
 
         if (!SABRE_HASSQLITE) $this->markTestSkipped('SQLite driver is not available');
-        $this->pdo = Sabre_CalDAV_TestUtil::getSQLiteDB();
+
+        if (file_exists(SABRE_TEMPDIR . '/testdb.sqlite'))
+            unlink(SABRE_TEMPDIR . '/testdb.sqlite');
+
+        $pdo = new \PDO('sqlite:' . SABRE_TEMPDIR . '/testdb.sqlite');
+        $pdo->setAttribute(\PDO::ATTR_ERRMODE,\PDO::ERRMODE_EXCEPTION);
+
+        // Yup this is definitely not 'fool proof', but good enough for now.
+        $queries = explode(';', file_get_contents(__DIR__ . '/../../../../examples/sql/sqlite.calendars.sql'));
+        foreach($queries as $query) {
+            $pdo->exec($query);
+        }
+        $this->pdo = $pdo;
 
     }
 

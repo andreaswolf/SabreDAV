@@ -1,22 +1,22 @@
 <?php
 
+namespace Sabre\DAV;
+
 /**
  * ObjectTree class
  *
  * This implementation of the Tree class makes use of the INode, IFile and ICollection API's
  *
- * @package Sabre
- * @subpackage DAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
+class ObjectTree extends Tree {
 
     /**
      * The root node
      *
-     * @var Sabre_DAV_ICollection
+     * @var ICollection
      */
     protected $rootNode;
 
@@ -32,9 +32,9 @@ class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
      *
      * This method expects the rootObject to be passed as a parameter
      *
-     * @param Sabre_DAV_ICollection $rootNode
+     * @param ICollection $rootNode
      */
-    public function __construct(Sabre_DAV_ICollection $rootNode) {
+    public function __construct(ICollection $rootNode) {
 
         $this->rootNode = $rootNode;
 
@@ -44,7 +44,7 @@ class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
      * Returns the INode object for the requested path
      *
      * @param string $path
-     * @return Sabre_DAV_INode
+     * @return INode
      */
     public function getNodeForPath($path) {
 
@@ -57,7 +57,7 @@ class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
         }
 
         // Attempting to fetch its parent
-        list($parentName, $baseName) = Sabre_DAV_URLUtil::splitPath($path);
+        list($parentName, $baseName) = URLUtil::splitPath($path);
 
         // If there was no parent, we must simply ask it from the root node.
         if ($parentName==="") {
@@ -66,8 +66,8 @@ class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
             // Otherwise, we recursively grab the parent and ask him/her.
             $parent = $this->getNodeForPath($parentName);
 
-            if (!($parent instanceof Sabre_DAV_ICollection))
-                throw new Sabre_DAV_Exception_NotFound('Could not find node at path: ' . $path);
+            if (!($parent instanceof ICollection))
+                throw new Exception\NotFound('Could not find node at path: ' . $path);
 
             $node = $parent->getChild($baseName);
 
@@ -91,13 +91,13 @@ class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
             // The root always exists
             if ($path==='') return true;
 
-            list($parent, $base) = Sabre_DAV_URLUtil::splitPath($path);
+            list($parent, $base) = URLUtil::splitPath($path);
 
             $parentNode = $this->getNodeForPath($parent);
-            if (!$parentNode instanceof Sabre_DAV_ICollection) return false;
+            if (!$parentNode instanceof ICollection) return false;
             return $parentNode->childExists($base);
 
-        } catch (Sabre_DAV_Exception_NotFound $e) {
+        } catch (Exception\NotFound $e) {
 
             return false;
 
@@ -154,6 +154,58 @@ class Sabre_DAV_ObjectTree extends Sabre_DAV_Tree {
         }
 
     }
+
+    /**
+     * This method tells the tree system to pre-fetch and cache a list of
+     * children of a single parent.
+     *
+     * There are a bunch of operations in the WebDAV stack that request many
+     * children (based on uris), and sometimes fetching many at once can
+     * optimize this.
+     *
+     * This method returns an array with the found nodes. It's keys are the
+     * original paths. The result may be out of order.
+     *
+     * @param array $paths List of nodes that must be fetched.
+     * @return array
+     */
+    public function getMultipleNodes($paths) {
+
+        // Finding common parents
+        $parents = [];
+        foreach($paths as $path) {
+            list($parent, $node) = URLUtil::splitPath($path);
+            if (!isset($parents[$parent])) {
+                $parents[$parent] = [$node];
+            } else {
+                $parents[$parent][] = $node;
+            }
+        }
+
+        $result = [];
+
+        foreach($parents as $parent=>$children) {
+
+            $parentNode = $this->getNodeForPath($parent);
+            if ($parentNode instanceof IMultiGet) {
+                foreach($parentNode->getMultipleChildren($children) as $childNode) {
+                    $fullPath = $parent . '/' . $childNode->getName();
+                    $result[$fullPath] = $childNode;
+                    $this->cache[$fullPath] = $childNode;
+                }
+            } else {
+                foreach($children as $child) {
+                    $fullPath = $parent . '/' . $child;
+                    $result[$fullPath] = $this->getNodeForPath($fullPath);
+                }
+            }
+
+        }
+
+        return $result;
+
+    }
+
 
 }
 

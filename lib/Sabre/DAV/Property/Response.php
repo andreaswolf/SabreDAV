@@ -1,5 +1,9 @@
 <?php
 
+namespace Sabre\DAV\Property;
+
+use Sabre\DAV;
+
 /**
  * Response property
  *
@@ -7,39 +11,58 @@
  * This is used by the Server class to encode individual items within a multistatus
  * response.
  *
- * @package Sabre
- * @subpackage DAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_DAV_Property_Response extends Sabre_DAV_Property implements Sabre_DAV_Property_IHref {
+class Response extends DAV\Property implements IHref {
 
     /**
      * Url for the response
      *
      * @var string
      */
-    private $href;
+    protected $href;
 
     /**
      * Propertylist, ordered by HTTP status code
      *
      * @var array
      */
-    private $responseProperties;
+    protected $responseProperties;
 
     /**
+     * The HTTP status for an entire response.
+     *
+     * This is currently only used in WebDAV-Sync
+     *
+     * @var string
+     */
+    protected $httpStatus;
+
+    /**
+     * The href argument is a url relative to the root of the server. This
+     * class will calculate the full path.
+     *
      * The responseProperties argument is a list of properties
      * within an array with keys representing HTTP status codes
      *
+     * Besides specific properties, the entire {DAV:}response element may also
+     * have a http status code.
+     * In most cases you don't need it.
+     *
+     * This is currently used by the Sync extension to indicate that a node is
+     * deleted.
+     *
      * @param string $href
      * @param array $responseProperties
+     * @param string $httpStatus
      */
-    public function __construct($href, array $responseProperties) {
+    public function __construct($href, array $responseProperties, $httpStatus = null) {
 
         $this->href = $href;
         $this->responseProperties = $responseProperties;
+        $this->httpStatus = $httpStatus;
 
     }
 
@@ -51,6 +74,17 @@ class Sabre_DAV_Property_Response extends Sabre_DAV_Property implements Sabre_DA
     public function getHref() {
 
         return $this->href;
+
+    }
+
+    /**
+     * Returns the httpStatus value
+     *
+     * @return string
+     */
+    public function getHttpStatus() {
+
+        return $this->httpStatus;
 
     }
 
@@ -68,11 +102,11 @@ class Sabre_DAV_Property_Response extends Sabre_DAV_Property implements Sabre_DA
     /**
      * serialize
      *
-     * @param Sabre_DAV_Server $server
-     * @param DOMElement $dom
+     * @param DAV\Server $server
+     * @param \DOMElement $dom
      * @return void
      */
-    public function serialize(Sabre_DAV_Server $server, DOMElement $dom) {
+    public function serialize(DAV\Server $server, \DOMElement $dom) {
 
         $document = $dom->ownerDocument;
         $properties = $this->responseProperties;
@@ -80,12 +114,17 @@ class Sabre_DAV_Property_Response extends Sabre_DAV_Property implements Sabre_DA
         $xresponse = $document->createElement('d:response');
         $dom->appendChild($xresponse);
 
-        $uri = Sabre_DAV_URLUtil::encodePath($this->href);
+        $uri = DAV\URLUtil::encodePath($this->href);
 
         // Adding the baseurl to the beginning of the url
         $uri = $server->getBaseUri() . $uri;
 
         $xresponse->appendChild($document->createElement('d:href',$uri));
+
+        if ($this->httpStatus) {
+            $statusString = $server->httpResponse->getStatusMessage($this->httpStatus);
+            $xresponse->appendChild($document->createElement('d:status', $statusString));
+        }
 
         // The properties variable is an array containing properties, grouped by
         // HTTP status
@@ -138,10 +177,10 @@ class Sabre_DAV_Property_Response extends Sabre_DAV_Property implements Sabre_DA
                 if (is_scalar($propertyValue)) {
                     $text = $document->createTextNode($propertyValue);
                     $currentProperty->appendChild($text);
-                } elseif ($propertyValue instanceof Sabre_DAV_PropertyInterface) {
+                } elseif ($propertyValue instanceof DAV\PropertyInterface) {
                     $propertyValue->serialize($server,$currentProperty);
                 } elseif (!is_null($propertyValue)) {
-                    throw new Sabre_DAV_Exception('Unknown property value type: ' . gettype($propertyValue) . ' for property: ' . $propertyName);
+                    throw new DAV\Exception('Unknown property value type: ' . gettype($propertyValue) . ' for property: ' . $propertyName);
                 }
 
             }
@@ -149,6 +188,27 @@ class Sabre_DAV_Property_Response extends Sabre_DAV_Property implements Sabre_DA
             $xpropstat->appendChild($document->createElement('d:status',$server->httpResponse->getStatusMessage($httpStatus)));
 
         }
+
+    }
+
+    /**
+     * Unserializes the property.
+     *
+     * This static method should return a an instance of this object.
+     *
+     * @param \DOMElement $prop
+     * @param array $propertyMap
+     * @return DAV\IProperty
+     */
+    public static function unserialize(\DOMElement $prop, array $propertyMap) {
+
+        // Delegating this to the ResponseList property. It does make more
+        // sense there.
+
+        $result = ResponseList::unserialize($prop, $propertyMap);
+        $result = $result->getResponses();
+
+        return $result[0];
 
     }
 

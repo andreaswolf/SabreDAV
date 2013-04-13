@@ -1,5 +1,11 @@
 <?php
 
+namespace Sabre\CalDAV\Notifications;
+
+use Sabre\DAV;
+use Sabre\CalDAV;
+use Sabre\DAVACL;
+
 /**
  * This node represents a list of notifications.
  *
@@ -7,20 +13,19 @@
  * interface to allow the Notifications plugin to mark the collection
  * as a notifications collection.
  *
- * This collection should only return Sabre_CalDAV_Notifications_INode nodes as
+ * This collection should only return Sabre\CalDAV\Notifications\INode nodes as
  * its children.
  *
- * @package Sabre
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_CalDAV_Notifications_Collection extends Sabre_DAV_Collection implements Sabre_CalDAV_Notifications_ICollection {
+class Collection extends DAV\Collection implements ICollection, DAVACL\IACL {
 
     /**
      * The notification backend
      *
-     * @var Sabre_CalDAV_Backend_NotificationSupport
+     * @var Sabre\CalDAV\Backend\NotificationSupport
      */
     protected $caldavBackend;
 
@@ -34,10 +39,10 @@ class Sabre_CalDAV_Notifications_Collection extends Sabre_DAV_Collection impleme
     /**
      * Constructor
      *
-     * @param Sabre_CalDAV_Backend_NotificationSupport $caldavBackend
+     * @param CalDAV\Backend\NotificationSupport $caldavBackend
      * @param string $principalUri
      */
-    public function __construct(Sabre_CalDAV_Backend_NotificationSupport $caldavBackend, $principalUri) {
+    public function __construct(CalDAV\Backend\NotificationSupport $caldavBackend, $principalUri) {
 
         $this->caldavBackend = $caldavBackend;
         $this->principalUri = $principalUri;
@@ -56,8 +61,9 @@ class Sabre_CalDAV_Notifications_Collection extends Sabre_DAV_Collection impleme
 
         foreach($notifications as $notification) {
 
-            $children[] = new Sabre_CalDAV_Notifications_Node(
+            $children[] = new Node(
                 $this->caldavBackend,
+                $this->principalUri,
                 $notification
             );
         }
@@ -74,6 +80,93 @@ class Sabre_CalDAV_Notifications_Collection extends Sabre_DAV_Collection impleme
     public function getName() {
 
         return 'notifications';
+
+    }
+
+    /**
+     * Returns the owner principal
+     *
+     * This must be a url to a principal, or null if there's no owner
+     *
+     * @return string|null
+     */
+    public function getOwner() {
+
+        return $this->principalUri;
+
+    }
+
+    /**
+     * Returns a group principal
+     *
+     * This must be a url to a principal, or null if there's no owner
+     *
+     * @return string|null
+     */
+    public function getGroup() {
+
+        return null;
+
+    }
+
+    /**
+     * Returns a list of ACE's for this node.
+     *
+     * Each ACE has the following properties:
+     *   * 'privilege', a string such as {DAV:}read or {DAV:}write. These are
+     *     currently the only supported privileges
+     *   * 'principal', a url to the principal who owns the node
+     *   * 'protected' (optional), indicating that this ACE is not allowed to
+     *      be updated.
+     *
+     * @return array
+     */
+    public function getACL() {
+
+        return array(
+            array(
+                'principal' => $this->getOwner(),
+                'privilege' => '{DAV:}read',
+                'protected' => true,
+            ),
+            array(
+                'principal' => $this->getOwner(),
+                'privilege' => '{DAV:}write',
+                'protected' => true,
+            )
+        );
+
+    }
+
+    /**
+     * Updates the ACL
+     *
+     * This method will receive a list of new ACE's as an array argument.
+     *
+     * @param array $acl
+     * @return void
+     */
+    public function setACL(array $acl) {
+
+        throw new DAV\Exception\NotImplemented('Updating ACLs is not implemented here');
+
+    }
+
+    /**
+     * Returns the list of supported privileges for this node.
+     *
+     * The returned data structure is a list of nested privileges.
+     * See Sabre\DAVACL\Plugin::getDefaultSupportedPrivilegeSet for a simple
+     * standard structure.
+     *
+     * If null is returned from this method, the default privilege set is used,
+     * which is fine for most common usecases.
+     *
+     * @return array|null
+     */
+    public function getSupportedPrivilegeSet() {
+
+        return null;
 
     }
 

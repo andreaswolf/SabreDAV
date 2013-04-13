@@ -1,15 +1,15 @@
 <?php
 
+namespace Sabre\CalDAV\Backend;
+
 /**
  * Every CalDAV backend must at least implement this interface.
- * 
- * @package Sabre
- * @subpackage CalDAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
- * @author Evert Pot (http://www.rooftopsolutions.nl/) 
+ *
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
+ * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-interface Sabre_CalDAV_Backend_BackendInterface {
+interface BackendInterface {
 
     /**
      * Returns a list of calendars for a principal.
@@ -24,6 +24,11 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      *
      * Furthermore it can contain webdav properties in clark notation. A very
      * common one is '{DAV:}displayname'.
+     *
+     * Many clients also require:
+     * {urn:ietf:params:xml:ns:caldav}supported-calendar-component-set
+     * For this property, you can just return an instance of
+     * Sabre\CalDAV\Property\SupportedCalendarComponentSet.
      *
      * @param string $principalUri
      * @return array
@@ -79,7 +84,7 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      * @param array $mutations
      * @return bool|array
      */
-    public function updateCalendar($calendarId, array $mutations); 
+    public function updateCalendar($calendarId, array $mutations);
 
     /**
      * Delete a calendar and all it's objects
@@ -95,10 +100,13 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      * Every item contains an array with the following keys:
      *   * id - unique identifier which will be used for subsequent updates
      *   * calendardata - The iCalendar-compatible calendar data
-     *   * uri - a unique key which will be used to construct the uri. This can be any arbitrary string.
+     *   * uri - a unique key which will be used to construct the uri. This can
+     *     be any arbitrary string, but making sure it ends with '.ics' is a
+     *     good idea. This is only the basename, or filename, not the full
+     *     path.
      *   * lastmodified - a timestamp of the last modification time
      *   * etag - An arbitrary string, surrounded by double-quotes. (e.g.:
-     *   '  "abcdef"')
+     *   '"abcdef"')
      *   * calendarid - The calendarid as it was passed to this function.
      *   * size - The size of the calendar objects, in bytes.
      *
@@ -122,6 +130,8 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      * Returns information from a single calendar object, based on it's object
      * uri.
      *
+     * The object uri is only the basename, or filename and not a full path.
+     *
      * The returned array must have the same keys as getCalendarObjects. The
      * 'calendardata' object is required here though, while it's not required
      * for getCalendarObjects.
@@ -133,7 +143,23 @@ interface Sabre_CalDAV_Backend_BackendInterface {
     public function getCalendarObject($calendarId,$objectUri);
 
     /**
+     * Returns a list of calendar objects.
+     *
+     * This method should work identical to getCalendarObject, but instead
+     * return all the calendar objects in the list as an array.
+     *
+     * If the backend supports this, it may allow for some speed-ups.
+     *
+     * @param mixed $calendarId
+     * @param array $uris
+     * @return array
+     */
+    public function getMultipleCalendarObjects($calendarId, array $uris);
+
+    /**
      * Creates a new calendar object.
+     *
+     * The object uri is only the basename, or filename and not a full path.
      *
      * It is possible return an etag from this function, which will be used in
      * the response to this PUT request. Note that the ETag must be surrounded
@@ -153,6 +179,8 @@ interface Sabre_CalDAV_Backend_BackendInterface {
     /**
      * Updates an existing calendarobject, based on it's uri.
      *
+     * The object uri is only the basename, or filename and not a full path.
+     *
      * It is possible return an etag from this function, which will be used in
      * the response to this PUT request. Note that the ETag must be surrounded
      * by double-quotes.
@@ -170,6 +198,8 @@ interface Sabre_CalDAV_Backend_BackendInterface {
 
     /**
      * Deletes an existing calendar object.
+     *
+     * The object uri is only the basename, or filename and not a full path.
      *
      * @param mixed $calendarId
      * @param string $objectUri
@@ -189,7 +219,7 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      * query.
      *
      * The list of filters are specified as an array. The exact array is
-     * documented by Sabre_CalDAV_CalendarQueryParser.
+     * documented by Sabre\CalDAV\CalendarQueryParser.
      *
      * Note that it is extremely likely that getCalendarObject for every path
      * returned from this method will be called almost immediately after. You
@@ -218,7 +248,7 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      * time-range filter specified on a VEVENT must for instance also handle
      * recurrence rules correctly.
      * A good example of how to interprete all these filters can also simply
-     * be found in Sabre_CalDAV_CalendarQueryFilter. This class is as correct
+     * be found in Sabre\CalDAV\CalendarQueryFilter. This class is as correct
      * as possible, so it gives you a good idea on what type of stuff you need
      * to think of.
      *
@@ -226,6 +256,6 @@ interface Sabre_CalDAV_Backend_BackendInterface {
      * @param array $filters
      * @return array
      */
-    public function calendarQuery($calendarId, array $filters); 
+    public function calendarQuery($calendarId, array $filters);
 
 }

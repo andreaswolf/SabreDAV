@@ -1,13 +1,17 @@
 <?php
 
-abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_TestCase {
+namespace Sabre\CalDAV\Backend;
+use Sabre\CalDAV;
+use Sabre\DAV;
+
+abstract class AbstractPDOTest extends \PHPUnit_Framework_TestCase {
 
     protected $pdo;
 
     function testConstruct() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
-        $this->assertTrue($backend instanceof Sabre_CalDAV_Backend_PDO);
+        $backend = new PDO($this->pdo);
+        $this->assertTrue($backend instanceof PDO);
 
     }
 
@@ -16,7 +20,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testGetCalendarsForUserNoCalendars() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $calendars = $backend->getCalendarsForUser('principals/user2');
         $this->assertEquals(array(),$calendars);
 
@@ -27,11 +31,11 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testCreateCalendarAndFetch() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array(
-            '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set' => new Sabre_CalDAV_Property_SupportedCalendarComponentSet(array('VEVENT')),
+            '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set' => new CalDAV\Property\SupportedCalendarComponentSet(array('VEVENT')),
             '{DAV:}displayname' => 'Hello!',
-            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new Sabre_CalDAV_Property_ScheduleCalendarTransp('transparent'),
+            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new CalDAV\Property\ScheduleCalendarTransp('transparent'),
         ));
         $calendars = $backend->getCalendarsForUser('principals/user2');
 
@@ -40,7 +44,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'uri'               => 'somerandomid',
             '{DAV:}displayname' => 'Hello!',
             '{urn:ietf:params:xml:ns:caldav}calendar-description' => '',
-            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new Sabre_CalDAV_Property_ScheduleCalendarTransp('transparent'),
+            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new CalDAV\Property\ScheduleCalendarTransp('transparent'),
         );
 
         $this->assertInternalType('array',$calendars);
@@ -60,7 +64,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testUpdateCalendarAndFetch() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
 
         //Creating a new calendar
         $newId = $backend->createCalendar('principals/user2','somerandomid',array());
@@ -68,7 +72,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
         // Updating the calendar
         $result = $backend->updateCalendar($newId,array(
             '{DAV:}displayname' => 'myCalendar',
-            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new Sabre_CalDAV_Property_ScheduleCalendarTransp('transparent'),
+            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new CalDAV\Property\ScheduleCalendarTransp('transparent'),
         ));
 
         // Verifying the result of the update
@@ -84,8 +88,8 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             '{DAV:}displayname' => 'myCalendar',
             '{urn:ietf:params:xml:ns:caldav}calendar-description' => '',
             '{urn:ietf:params:xml:ns:caldav}calendar-timezone' => '',
-            '{http://calendarserver.org/ns/}getctag' => '2',
-            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new Sabre_CalDAV_Property_ScheduleCalendarTransp('transparent'),
+            '{http://calendarserver.org/ns/}getctag' => 'http://sabredav.org/ns/sync/2',
+            '{urn:ietf:params:xml:ns:caldav}schedule-calendar-transp' => new CalDAV\Property\ScheduleCalendarTransp('transparent'),
         );
 
         $this->assertInternalType('array',$calendars);
@@ -105,7 +109,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testUpdateCalendarUnknownProperty() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
 
         //Creating a new calendar
         $newId = $backend->createCalendar('principals/user2','somerandomid',array());
@@ -129,9 +133,9 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testDeleteCalendar() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array(
-            '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set' => new Sabre_CalDAV_Property_SupportedCalendarComponentSet(array('VEVENT')),
+            '{urn:ietf:params:xml:ns:caldav}supported-calendar-component-set' => new CalDAV\Property\SupportedCalendarComponentSet(array('VEVENT')),
             '{DAV:}displayname' => 'Hello!',
         ));
 
@@ -144,11 +148,11 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
 
     /**
      * @depends testCreateCalendarAndFetch
-     * @expectedException Sabre_DAV_Exception
+     * @expectedException \Sabre\DAV\Exception
      */
     function testCreateCalendarIncorrectComponentSet() {;
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
 
         //Creating a new calendar
         $newId = $backend->createCalendar('principals/user2','somerandomid',array(
@@ -159,7 +163,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
 
     function testCreateCalendarObject() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -174,17 +178,65 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'firstoccurence' => strtotime('20120101'),
             'lastoccurence' => strtotime('20120101')+(3600*24),
             'componenttype' => 'VEVENT',
-        ), $result->fetch(PDO::FETCH_ASSOC));
+        ), $result->fetch(\PDO::FETCH_ASSOC));
+
+    }
+    function testGetMultipleObjects() {
+
+        $backend = new PDO($this->pdo);
+        $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
+
+        $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        $backend->createCalendarObject($returnedId, 'id-1', $object);
+        $backend->createCalendarObject($returnedId, 'id-2', $object);
+
+        $check = [
+            [
+                'id' => 1,
+                'etag' => '"' . md5($object) . '"',
+                'uri' => 'id-1',
+                'size' => strlen($object),
+                'calendardata' => $object,
+                'lastmodified' => null,
+                'calendarid' => $returnedId,
+            ],
+            [
+                'id' => 2,
+                'etag' => '"' . md5($object) . '"',
+                'uri' => 'id-2',
+                'size' => strlen($object),
+                'calendardata' => $object,
+                'lastmodified' => null,
+                'calendarid' => $returnedId,
+            ],
+        ];
+
+        $result = $backend->getMultipleCalendarObjects($returnedId, [ 'id-1', 'id-2' ]);
+
+        foreach($check as $index => $props) {
+
+            foreach($props as $key=>$value) {
+
+                if ($key!=='lastmodified') {
+                    $this->assertEquals($value, $result[$index][$key]);
+                } else {
+                    $this->assertTrue(isset($result[$index][$key]));
+                }
+
+            }
+
+        }
 
     }
 
     /**
-     * @expectedException Sabre_DAV_Exception_BadRequest
+     * @expectedException Sabre\DAV\Exception\BadRequest
      * @depends testCreateCalendarObject
      */
     function testCreateCalendarObjectNoComponent() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VTIMEZONE\r\nEND:VTIMEZONE\r\nEND:VCALENDAR\r\n";
@@ -198,7 +250,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testCreateCalendarObjectDuration() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20120101\r\nDURATION:P2D\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -213,7 +265,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'firstoccurence' => strtotime('20120101'),
             'lastoccurence' => strtotime('20120101')+(3600*48),
             'componenttype' => 'VEVENT',
-        ), $result->fetch(PDO::FETCH_ASSOC));
+        ), $result->fetch(\PDO::FETCH_ASSOC));
 
     }
 
@@ -222,7 +274,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testCreateCalendarObjectNoDTEND() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE-TIME:20120101T100000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -237,7 +289,31 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'firstoccurence' => strtotime('2012-01-01 10:00:00'),
             'lastoccurence' => strtotime('2012-01-01 10:00:00'),
             'componenttype' => 'VEVENT',
-        ), $result->fetch(PDO::FETCH_ASSOC));
+        ), $result->fetch(\PDO::FETCH_ASSOC));
+
+    }
+
+    /**
+     * @depends testCreateCalendarObject
+     */
+    function testCreateCalendarObjectWithDTEND() {
+
+        $backend = new PDO($this->pdo);
+        $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
+
+        $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE-TIME:20120101T100000Z\r\nDTEND:20120101T110000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+        $backend->createCalendarObject($returnedId, 'random-id', $object);
+
+        $result = $this->pdo->query('SELECT etag, size, calendardata, firstoccurence, lastoccurence, componenttype FROM calendarobjects WHERE uri = "random-id"');
+        $this->assertEquals(array(
+            'etag' => md5($object),
+            'size' => strlen($object),
+            'calendardata' => $object,
+            'firstoccurence' => strtotime('2012-01-01 10:00:00'),
+            'lastoccurence' => strtotime('2012-01-01 11:00:00'),
+            'componenttype' => 'VEVENT',
+        ), $result->fetch(\PDO::FETCH_ASSOC));
 
     }
 
@@ -246,7 +322,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testCreateCalendarObjectInfiniteReccurence() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE-TIME:20120101T100000Z\r\nRRULE:FREQ=DAILY\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -259,9 +335,9 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'size' => strlen($object),
             'calendardata' => $object,
             'firstoccurence' => strtotime('2012-01-01 10:00:00'),
-            'lastoccurence' => strtotime(Sabre_CalDAV_Backend_PDO::MAX_DATE),
+            'lastoccurence' => strtotime(PDO::MAX_DATE),
             'componenttype' => 'VEVENT',
-        ), $result->fetch(PDO::FETCH_ASSOC));
+        ), $result->fetch(\PDO::FETCH_ASSOC));
 
     }
 
@@ -270,7 +346,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testCreateCalendarObjectEndingReccurence() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE-TIME:20120101T100000Z\r\nDTEND;VALUE=DATE-TIME:20120101T110000Z\r\nRRULE:FREQ=DAILY;COUNT=1000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -285,7 +361,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'firstoccurence' => strtotime('2012-01-01 10:00:00'),
             'lastoccurence' => strtotime('2012-01-01 11:00:00') + (3600 * 24 * 999),
             'componenttype' => 'VEVENT',
-        ), $result->fetch(PDO::FETCH_ASSOC));
+        ), $result->fetch(\PDO::FETCH_ASSOC));
 
     }
 
@@ -294,7 +370,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testCreateCalendarObjectTask() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nDUE;VALUE=DATE-TIME:20120101T100000Z\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
@@ -309,7 +385,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             'firstoccurence' => null,
             'lastoccurence' => null,
             'componenttype' => 'VTODO',
-        ), $result->fetch(PDO::FETCH_ASSOC));
+        ), $result->fetch(\PDO::FETCH_ASSOC));
 
     }
 
@@ -318,7 +394,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testGetCalendarObjects() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -341,7 +417,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testUpdateCalendarObject() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -363,7 +439,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
      */
     function testDeleteCalendarObject() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $returnedId = $backend->createCalendar('principals/user2','somerandomid',array());
 
         $object = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
@@ -377,7 +453,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
 
     function testCalendarQueryNoResult() {
 
-        $abstract = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $abstract = new PDO($this->pdo);
         $filters = array(
             'name' => 'VCALENDAR',
             'comp-filters' => array(
@@ -401,7 +477,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
 
     function testCalendarQueryTodo() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $backend->createCalendarObject(1, "todo", "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
 
@@ -428,7 +504,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
     }
     function testCalendarQueryTodoNotMatch() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $backend->createCalendarObject(1, "todo", "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
 
@@ -463,7 +539,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
 
     function testCalendarQueryNoFilter() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $backend->createCalendarObject(1, "todo", "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
 
@@ -483,7 +559,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
 
     function testCalendarQueryTimeRange() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $backend->createCalendarObject(1, "todo", "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event2", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120103\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
@@ -497,8 +573,8 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
                     'prop-filters' => array(),
                     'is-not-defined' => false,
                     'time-range' => array(
-                        'start' => new DateTime('20120103'),
-                        'end'   => new DateTime('20120104'),
+                        'start' => new \DateTime('20120103'),
+                        'end'   => new \DateTime('20120104'),
                     ),
                 ),
             ),
@@ -514,7 +590,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
     }
     function testCalendarQueryTimeRangeNoEnd() {
 
-        $backend = new Sabre_CalDAV_Backend_PDO($this->pdo);
+        $backend = new PDO($this->pdo);
         $backend->createCalendarObject(1, "todo", "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120101\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
         $backend->createCalendarObject(1, "event2", "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART:20120103\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
@@ -528,7 +604,7 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
                     'prop-filters' => array(),
                     'is-not-defined' => false,
                     'time-range' => array(
-                        'start' => new DateTime('20120102'),
+                        'start' => new \DateTime('20120102'),
                         'end' => null,
                     ),
                 ),
@@ -542,5 +618,190 @@ abstract class Sabre_CalDAV_Backend_AbstractPDOTest extends PHPUnit_Framework_Te
             "event2",
         ), $backend->calendarQuery(1, $filters));
 
+    }
+
+    function testGetChanges() {
+
+        $backend = new PDO($this->pdo);
+        $id = $backend->createCalendar(
+            'principals/user1',
+            'bla',
+            []
+        );
+        $result = $backend->getChangesForCalendar($id, null, 1);
+
+        $this->assertEquals([
+            'syncToken' => 1,
+            'modified' => [],
+            'deleted' => [],
+            'added' => [],
+        ], $result);
+
+        $currentToken = $result['syncToken'];
+
+        $dummyTodo = "BEGIN:VCALENDAR\r\nBEGIN:VTODO\r\nEND:VTODO\r\nEND:VCALENDAR\r\n";
+
+        $backend->createCalendarObject($id, "todo1.ics", $dummyTodo);
+        $backend->createCalendarObject($id, "todo2.ics", $dummyTodo);
+        $backend->createCalendarObject($id, "todo3.ics", $dummyTodo);
+        $backend->updateCalendarObject($id, "todo1.ics", $dummyTodo);
+        $backend->deleteCalendarObject($id, "todo2.ics");
+
+        $result = $backend->getChangesForCalendar($id, $currentToken, 1);
+
+        $this->assertEquals([
+            'syncToken' => 6,
+            'modified'  => ["todo1.ics"],
+            'deleted'   => ["todo2.ics"],
+            'added'     => ["todo3.ics"],
+        ], $result);
+
+    }
+
+    function testCreateSubscriptions() {
+
+        $props = [
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal.ics', false),
+            '{DAV:}displayname' => 'cal',
+            '{http://apple.com/ns/ical/}refreshrate' => 'P1W',
+            '{http://apple.com/ns/ical/}calendar-color' => '#FF00FFFF',
+            '{http://calendarserver.org/ns/}subscribed-strip-todos' => true,
+            //'{http://calendarserver.org/ns/}subscribed-strip-alarms' => true,
+            '{http://calendarserver.org/ns/}subscribed-strip-attachments' => true,
+        ];
+
+        $backend = new PDO($this->pdo);
+        $backend->createSubscription('principals/user1', 'sub1', $props);
+
+        $subs = $backend->getSubscriptionsForUser('principals/user1');
+
+        $expected = $props;
+        $expected['id'] = 1;
+        $expected['uri'] = 'sub1';
+        $expected['principaluri'] = 'principals/user1';
+
+        unset($expected['{http://calendarserver.org/ns/}source']);
+        $expected['source'] = 'http://example.org/cal.ics';
+
+        $this->assertEquals(1, count($subs));
+        foreach($expected as $k=>$v) {
+            $this->assertEquals($subs[0][$k], $expected[$k]);
+        }
+
+    }
+
+    /**
+     * @expectedException \Sabre\DAV\Exception\Forbidden
+     */
+    function testCreateSubscriptionFail() {
+
+        $props = [
+        ];
+
+        $backend = new PDO($this->pdo);
+        $backend->createSubscription('principals/user1', 'sub1', $props);
+
+    }
+
+    function testUpdateSubscriptions() {
+
+        $props = [
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal.ics', false),
+            '{DAV:}displayname' => 'cal',
+            '{http://apple.com/ns/ical/}refreshrate' => 'P1W',
+            '{http://apple.com/ns/ical/}calendar-color' => '#FF00FFFF',
+            '{http://calendarserver.org/ns/}subscribed-strip-todos' => true,
+            //'{http://calendarserver.org/ns/}subscribed-strip-alarms' => true,
+            '{http://calendarserver.org/ns/}subscribed-strip-attachments' => true,
+        ];
+
+        $backend = new PDO($this->pdo);
+        $backend->createSubscription('principals/user1', 'sub1', $props);
+
+        $newProps = [
+            '{DAV:}displayname' => 'new displayname',
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal2.ics', false),
+        ];
+
+        $result = $backend->updateSubscription(1, $newProps);
+
+        $this->assertTrue($result);
+
+        $subs = $backend->getSubscriptionsForUser('principals/user1');
+
+        $expected = array_merge($props, $newProps);
+        $expected['id'] = 1;
+        $expected['uri'] = 'sub1';
+        $expected['principaluri'] = 'principals/user1';
+
+        unset($expected['{http://calendarserver.org/ns/}source']);
+        $expected['source'] = 'http://example.org/cal2.ics';
+
+        $this->assertEquals(1, count($subs));
+        foreach($expected as $k=>$v) {
+            $this->assertEquals($subs[0][$k], $expected[$k]);
+        }
+
+    }
+
+    function testUpdateSubscriptionsFail() {
+
+        $props = [
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal.ics', false),
+            '{DAV:}displayname' => 'cal',
+            '{http://apple.com/ns/ical/}refreshrate' => 'P1W',
+            '{http://apple.com/ns/ical/}calendar-color' => '#FF00FFFF',
+            '{http://calendarserver.org/ns/}subscribed-strip-todos' => true,
+            //'{http://calendarserver.org/ns/}subscribed-strip-alarms' => true,
+            '{http://calendarserver.org/ns/}subscribed-strip-attachments' => true,
+        ];
+
+        $backend = new PDO($this->pdo);
+        $backend->createSubscription('principals/user1', 'sub1', $props);
+
+        $newProps = [
+            '{DAV:}displayname' => 'new displayname',
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal2.ics', false),
+            '{DAV:}unknown' => 'foo',
+        ];
+
+        $result = $backend->updateSubscription(1, $newProps);
+
+        $this->assertEquals([
+            403 => [
+                '{DAV:}unknown' => null,
+            ],
+            424 => [
+                '{DAV:}displayname' => null,
+                '{http://calendarserver.org/ns/}source' => null,
+            ],
+        ], $result);
+
+    }
+
+    function testDeleteSubscriptions() {
+
+        $props = [
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal.ics', false),
+            '{DAV:}displayname' => 'cal',
+            '{http://apple.com/ns/ical/}refreshrate' => 'P1W',
+            '{http://apple.com/ns/ical/}calendar-color' => '#FF00FFFF',
+            '{http://calendarserver.org/ns/}subscribed-strip-todos' => true,
+            //'{http://calendarserver.org/ns/}subscribed-strip-alarms' => true,
+            '{http://calendarserver.org/ns/}subscribed-strip-attachments' => true,
+        ];
+
+        $backend = new PDO($this->pdo);
+        $backend->createSubscription('principals/user1', 'sub1', $props);
+
+        $newProps = [
+            '{DAV:}displayname' => 'new displayname',
+            '{http://calendarserver.org/ns/}source' => new \Sabre\DAV\Property\Href('http://example.org/cal2.ics', false),
+        ];
+
+        $backend->deleteSubscription(1);
+
+        $subs = $backend->getSubscriptionsForUser('principals/user1');
+        $this->assertEquals(0, count($subs));
     }
 }

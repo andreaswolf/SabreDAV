@@ -1,10 +1,14 @@
 <?php
 
-class Sabre_CalDAV_Schedule_OutboxTest extends PHPUnit_Framework_TestCase {
+namespace Sabre\CalDAV\Schedule;
+use Sabre\CalDAV;
+use Sabre\DAV;
+
+class OutboxTest extends \PHPUnit_Framework_TestCase {
 
     function testSetup() {
 
-        $outbox = new Sabre_CalDAV_Schedule_Outbox('principals/user1');
+        $outbox = new Outbox('principals/user1');
         $this->assertEquals('outbox', $outbox->getName());
         $this->assertEquals(array(), $outbox->getChildren());
         $this->assertEquals('principals/user1', $outbox->getOwner());
@@ -12,12 +16,13 @@ class Sabre_CalDAV_Schedule_OutboxTest extends PHPUnit_Framework_TestCase {
 
         $this->assertEquals(array(
             array(
-                'privilege' => '{' . Sabre_CalDAV_Plugin::NS_CALDAV . '}schedule-query-freebusy',
+                'privilege' => '{' . CalDAV\Plugin::NS_CALDAV . '}schedule-query-freebusy',
                 'principal' => 'principals/user1',
                 'protected' => true,
             ),
+
             array(
-                'privilege' => '{' . Sabre_CalDAV_Plugin::NS_CALDAV . '}schedule-post-vevent',
+                'privilege' => '{' . CalDAV\Plugin::NS_CALDAV . '}schedule-post-vevent',
                 'principal' => 'principals/user1',
                 'protected' => true,
             ),
@@ -26,12 +31,32 @@ class Sabre_CalDAV_Schedule_OutboxTest extends PHPUnit_Framework_TestCase {
                 'principal' => 'principals/user1',
                 'protected' => true,
             ),
+            array(
+                'privilege' => '{' . CalDAV\Plugin::NS_CALDAV . '}schedule-query-freebusy',
+                'principal' => 'principals/user1/calendar-proxy-write',
+                'protected' => true,
+            ),
+            array(
+                'privilege' => '{' . CalDAV\Plugin::NS_CALDAV . '}schedule-post-vevent',
+                'principal' => 'principals/user1/calendar-proxy-write',
+                'protected' => true,
+            ),
+            array(
+                'privilege' => '{DAV:}read',
+                'principal' => 'principals/user1/calendar-proxy-read',
+                'protected' => true,
+            ),
+            array(
+                'privilege' => '{DAV:}read',
+                'principal' => 'principals/user1/calendar-proxy-write',
+                'protected' => true,
+            ),
         ), $outbox->getACL());
 
         $ok = false;
         try {
             $outbox->setACL(array());
-        } catch (Sabre_DAV_Exception_MethodNotAllowed $e) {
+        } catch (DAV\Exception\MethodNotAllowed $e) {
             $ok = true;
         }
         if (!$ok) {
@@ -42,16 +67,16 @@ class Sabre_CalDAV_Schedule_OutboxTest extends PHPUnit_Framework_TestCase {
 
     function testGetSupportedPrivilegeSet() {
 
-        $outbox = new Sabre_CalDAV_Schedule_Outbox('principals/user1');
+        $outbox = new Outbox('principals/user1');
         $r = $outbox->getSupportedPrivilegeSet();
 
         $ok = 0;
         foreach($r['aggregates'] as $priv) {
 
-            if ($priv['privilege'] == '{' . Sabre_CalDAV_Plugin::NS_CALDAV . '}schedule-query-freebusy') {
+            if ($priv['privilege'] == '{' . CalDAV\Plugin::NS_CALDAV . '}schedule-query-freebusy') {
                 $ok++;
             }
-            if ($priv['privilege'] == '{' . Sabre_CalDAV_Plugin::NS_CALDAV . '}schedule-post-vevent') {
+            if ($priv['privilege'] == '{' . CalDAV\Plugin::NS_CALDAV . '}schedule-post-vevent') {
                 $ok++;
             }
         }

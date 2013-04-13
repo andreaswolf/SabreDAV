@@ -13,6 +13,11 @@ tmpdata
 tests/temp
 tests/.sabredav
 *.swp
-vendor
 !vendor/sabre/vobject
 composer.lock
+vendor
+bin/phing
+bin/phpunit
+bin/vobjectvalidate.php
+bin/phpdocmd
+bin/phpunit

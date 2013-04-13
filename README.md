@@ -22,21 +22,9 @@ SabreDAV allows you to easily add WebDAV support to a PHP application. SabreDAV 
 * [RFC4709](http://www.ietf.org/rfc/rfc4709.txt): [DavMount](http://code.google.com/p/sabredav/wiki/DavMount).
 * [RFC4791](http://www.ietf.org/rfc/rfc4791.txt): CalDAV.
 * [RFC4918](http://www.ietf.org/rfc/rfc4918.txt): WebDAV revision.
-* [RFC5397](http://www.ietf.org/rfc/rfc5689.txt): current-user-principal.
+* [RFC5397](http://www.ietf.org/rfc/rfc5397.txt): current-user-principal.
 * [RFC5689](http://www.ietf.org/rfc/rfc5689.txt): Extended MKCOL.
 * [RFC5789](http://tools.ietf.org/html/rfc5789): PATCH method for HTTP.
 * [RFC6352](http://www.ietf.org/rfc/rfc6352.txt): CardDAV
 * [draft-daboo-carddav-directory-gateway](http://tools.ietf.org/html/draft-daboo-carddav-directory-gateway): CardDAV directory gateway
 * CalDAV ctag, CalDAV-proxy.
-
-## Live Demo
-
-### Head over to:
-
-* Url: [http://demo.sabredav.org/public/](http://demo.sabredav.org/public/)
-* Username: testuser
-* Password: test
-
-**Please note:** Due to the webserver stack (nginx with varnish) some clients will not work correctly. At the very least this includes Finder and Cyberduck. Any client using chunked transfer encoding or expect *100-Continue* will fail.
-
-The demo site is kindly hosted by sourceforge, so take it easy with the diskspace. It's limited!

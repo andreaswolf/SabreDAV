@@ -1,17 +1,20 @@
 <?php
 
+namespace Sabre\CardDAV\Backend;
+
+use Sabre\CardDAV;
+use Sabre\DAV;
+
 /**
  * PDO CardDAV backend
  *
  * This CardDAV backend uses PDO to store addressbooks
  *
- * @package Sabre
- * @subpackage CardDAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
+class PDO extends AbstractBackend implements SyncSupport {
 
     /**
      * PDO connection
@@ -31,17 +34,25 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
     protected $cardsTableName;
 
     /**
+     * The table name that will be used for tracking changes in address books.
+     *
+     * @var string
+     */
+    protected $addressBookChangesTableName;
+
+    /**
      * Sets up the object
      *
-     * @param PDO $pdo
+     * @param \PDO $pdo
      * @param string $addressBooksTableName
      * @param string $cardsTableName
      */
-    public function __construct(PDO $pdo, $addressBooksTableName = 'addressbooks', $cardsTableName = 'cards') {
+    public function __construct(\PDO $pdo, $addressBooksTableName = 'addressbooks', $cardsTableName = 'cards', $addressBookChangesTableName = 'addressbookchanges') {
 
         $this->pdo = $pdo;
         $this->addressBooksTableName = $addressBooksTableName;
         $this->cardsTableName = $cardsTableName;
+        $this->addressBookChangesTableName = $addressBookChangesTableName;
 
     }
 
@@ -53,7 +64,7 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
      */
     public function getAddressBooksForUser($principalUri) {
 
-        $stmt = $this->pdo->prepare('SELECT id, uri, displayname, principaluri, description, ctag FROM '.$this->addressBooksTableName.' WHERE principaluri = ?');
+        $stmt = $this->pdo->prepare('SELECT id, uri, displayname, principaluri, description, synctoken FROM '.$this->addressBooksTableName.' WHERE principaluri = ?');
         $stmt->execute(array($principalUri));
 
         $addressBooks = array();
@@ -65,10 +76,11 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
                 'uri' => $row['uri'],
                 'principaluri' => $row['principaluri'],
                 '{DAV:}displayname' => $row['displayname'],
-                '{' . Sabre_CardDAV_Plugin::NS_CARDDAV . '}addressbook-description' => $row['description'],
-                '{http://calendarserver.org/ns/}getctag' => $row['ctag'],
-                '{' . Sabre_CardDAV_Plugin::NS_CARDDAV . '}supported-address-data' =>
-                    new Sabre_CardDAV_Property_SupportedAddressData(),
+                '{' . CardDAV\Plugin::NS_CARDDAV . '}addressbook-description' => $row['description'],
+                '{http://calendarserver.org/ns/}getctag' => $row['synctoken'],
+                '{' . CardDAV\Plugin::NS_CARDDAV . '}supported-address-data' =>
+                    new CardDAV\Property\SupportedAddressData(),
+                '{DAV:}sync-token' => $row['synctoken']?$row['synctoken']:'0',
             );
 
         }
@@ -81,12 +93,12 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
     /**
      * Updates an addressbook's properties
      *
-     * See Sabre_DAV_IProperties for a description of the mutations array, as
+     * See Sabre\DAV\IProperties for a description of the mutations array, as
      * well as the return value.
      *
      * @param mixed $addressBookId
      * @param array $mutations
-     * @see Sabre_DAV_IProperties::updateProperties
+     * @see Sabre\DAV\IProperties::updateProperties
      * @return bool|array
      */
     public function updateAddressBook($addressBookId, array $mutations) {
@@ -99,7 +111,7 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
                 case '{DAV:}displayname' :
                     $updates['displayname'] = $newValue;
                     break;
-                case '{' . Sabre_CardDAV_Plugin::NS_CARDDAV . '}addressbook-description' :
+                case '{' . CardDAV\Plugin::NS_CARDDAV . '}addressbook-description' :
                     $updates['description'] = $newValue;
                     break;
                 default :
@@ -115,9 +127,15 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
             return false;
         }
 
-        $query = 'UPDATE ' . $this->addressBooksTableName . ' SET ctag = ctag + 1 ';
+        $query = 'UPDATE ' . $this->addressBooksTableName . ' SET ';
+        $first = true;
         foreach($updates as $key=>$value) {
-            $query.=', `' . $key . '` = :' . $key . ' ';
+            if ($first) {
+                $first = false;
+            } else {
+                $query.=', ';
+            }
+            $query.=' `' . $key . '` = :' . $key . ' ';
         }
         $query.=' WHERE id = :addressbookid';
 
@@ -125,6 +143,8 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
         $updates['addressbookid'] = $addressBookId;
 
         $stmt->execute($updates);
+
+        $this->addChange($addressBookId, "", 2);
 
         return true;
 
@@ -153,18 +173,19 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
                 case '{DAV:}displayname' :
                     $values['displayname'] = $newValue;
                     break;
-                case '{' . Sabre_CardDAV_Plugin::NS_CARDDAV . '}addressbook-description' :
+                case '{' . CardDAV\Plugin::NS_CARDDAV . '}addressbook-description' :
                     $values['description'] = $newValue;
                     break;
                 default :
-                    throw new Sabre_DAV_Exception_BadRequest('Unknown property: ' . $property);
+                    throw new DAV\Exception\BadRequest('Unknown property: ' . $property);
             }
 
         }
 
-        $query = 'INSERT INTO ' . $this->addressBooksTableName . ' (uri, displayname, description, principaluri, ctag) VALUES (:uri, :displayname, :description, :principaluri, 1)';
+        $query = 'INSERT INTO ' . $this->addressBooksTableName . ' (uri, displayname, description, principaluri, synctoken) VALUES (:uri, :displayname, :description, :principaluri, 1)';
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($values);
+        return $this->pdo->lastInsertId();
 
     }
 
@@ -177,10 +198,13 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
     public function deleteAddressBook($addressBookId) {
 
         $stmt = $this->pdo->prepare('DELETE FROM ' . $this->cardsTableName . ' WHERE addressbookid = ?');
-        $stmt->execute(array($addressBookId));
+        $stmt->execute([$addressBookId]);
 
         $stmt = $this->pdo->prepare('DELETE FROM ' . $this->addressBooksTableName . ' WHERE id = ?');
-        $stmt->execute(array($addressBookId));
+        $stmt->execute([$addressBookId]);
+
+        $stmt = $this->pdo->prepare('DELETE FROM '.$this->addressBookChangesTableName.' WHERE id = ?');
+        $stmt->execute([$addressBookId]);
 
     }
 
@@ -208,7 +232,7 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
         $stmt = $this->pdo->prepare('SELECT id, carddata, uri, lastmodified FROM ' . $this->cardsTableName . ' WHERE addressbookid = ?');
         $stmt->execute(array($addressbookId));
 
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
 
     }
@@ -219,6 +243,8 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
      * The same set of properties must be returned as with getCards. The only
      * exception is that 'carddata' is absolutely required.
      *
+     * If the card does not exist, you must return false.
+     *
      * @param mixed $addressBookId
      * @param string $cardUri
      * @return array
@@ -228,9 +254,38 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
         $stmt = $this->pdo->prepare('SELECT id, carddata, uri, lastmodified FROM ' . $this->cardsTableName . ' WHERE addressbookid = ? AND uri = ? LIMIT 1');
         $stmt->execute(array($addressBookId, $cardUri));
 
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
 
-        return (count($result)>0?$result[0]:false);
+        return $result?$result:false;
+
+    }
+
+    /**
+     * Returns a list of cards.
+     *
+     * This method should work identical to getCard, but instead return all the
+     * cards in the list as an array.
+     *
+     * If the backend supports this, it may allow for some speed-ups.
+     *
+     * @param mixed $addressBookId
+     * @param array $uris
+     * @return array
+     */
+    public function getMultipleCards($addressBookId, array $uris) {
+
+        return array_map(function($uri) use ($addressBookId) {
+            return $this->getCard($addressBookId, $uri);
+        }, $uris);
+
+        $query = 'SELECT id, carddata, uri, lastmodified FROM ' . $this->cardsTableName . ' WHERE addressbookid = ? AND uri = IN (';
+        // Inserting a whole bunch of question marks
+        $query.=implode(',', array_fill(0, count($uris), '?'));
+        $query.=')';
+
+        $stmt = $this->pdo->prepare($query);
+        $stmt->execute(array_merge([$addressBookId], $uris));
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
     }
 
@@ -265,8 +320,7 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
 
         $result = $stmt->execute(array($cardData, $cardUri, time(), $addressBookId));
 
-        $stmt2 = $this->pdo->prepare('UPDATE ' . $this->addressBooksTableName . ' SET ctag = ctag + 1 WHERE id = ?');
-        $stmt2->execute(array($addressBookId));
+        $this->addChange($addressBookId, $cardUri, 1);
 
         return '"' . md5($cardData) . '"';
 
@@ -302,8 +356,7 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
         $stmt = $this->pdo->prepare('UPDATE ' . $this->cardsTableName . ' SET carddata = ?, lastmodified = ? WHERE uri = ? AND addressbookid =?');
         $stmt->execute(array($cardData, time(), $cardUri, $addressBookId));
 
-        $stmt2 = $this->pdo->prepare('UPDATE ' . $this->addressBooksTableName . ' SET ctag = ctag + 1 WHERE id = ?');
-        $stmt2->execute(array($addressBookId));
+        $this->addChange($addressBookId, $cardUri, 2);
 
         return '"' . md5($cardData) . '"';
 
@@ -321,10 +374,151 @@ class Sabre_CardDAV_Backend_PDO extends Sabre_CardDAV_Backend_Abstract {
         $stmt = $this->pdo->prepare('DELETE FROM ' . $this->cardsTableName . ' WHERE addressbookid = ? AND uri = ?');
         $stmt->execute(array($addressBookId, $cardUri));
 
-        $stmt2 = $this->pdo->prepare('UPDATE ' . $this->addressBooksTableName . ' SET ctag = ctag + 1 WHERE id = ?');
-        $stmt2->execute(array($addressBookId));
+        $this->addChange($addressBookId, $cardUri, 3);
 
         return $stmt->rowCount()===1;
+
+    }
+
+    /**
+     * The getChanges method returns all the changes that have happened, since
+     * the specified syncToken in the specified address book.
+     *
+     * This function should return an array, such as the following:
+     *
+     * [
+     *   'syncToken' => 'The current synctoken',
+     *   'added'   => [
+     *      'new.txt',
+     *   ],
+     *   'modified'   => [
+     *      'updated.txt',
+     *   ],
+     *   'deleted' => [
+     *      'foo.php.bak',
+     *      'old.txt'
+     *   ]
+     * ];
+     *
+     * The returned syncToken property should reflect the *current* syncToken
+     * of the addressbook, as reported in the {DAV:}sync-token property This is
+     * needed here too, to ensure the operation is atomic.
+     *
+     * If the $syncToken argument is specified as null, this is an initial
+     * sync, and all members should be reported.
+     *
+     * The modified property is an array of nodenames that have changed since
+     * the last token.
+     *
+     * The deleted property is an array with nodenames, that have been deleted
+     * from collection.
+     *
+     * The $syncLevel argument is basically the 'depth' of the report. If it's
+     * 1, you only have to report changes that happened only directly in
+     * immediate descendants. If it's 2, it should also include changes from
+     * the nodes below the child collections. (grandchildren)
+     *
+     * The $limit argument allows a client to specify how many results should
+     * be returned at most. If the limit is not specified, it should be treated
+     * as infinite.
+     *
+     * If the limit (infinite or not) is higher than you're willing to return,
+     * you should throw a Sabre\DAV\Exception\TooMuchMatches() exception.
+     *
+     * If the syncToken is expired (due to data cleanup) or unknown, you must
+     * return null.
+     *
+     * The limit is 'suggestive'. You are free to ignore it.
+     *
+     * @param string $addressBookId
+     * @param string $syncToken
+     * @param int $syncLevel
+     * @param int $limit
+     * @return array
+     */
+    public function getChangesForAddressBook($addressBookId, $syncToken, $syncLevel, $limit = null) {
+
+        // Current synctoken
+        $stmt = $this->pdo->prepare('SELECT synctoken FROM addressbooks WHERE id = ?');
+        $stmt->execute([ $addressBookId ]);
+        $currentToken = $stmt->fetchColumn(0);
+
+        if (is_null($currentToken)) return null;
+
+        $result = [
+            'syncToken' => $currentToken,
+            'added'     => [],
+            'modified'  => [],
+            'deleted'   => [],
+        ];
+
+        if ($syncToken) {
+
+            $query = "SELECT uri, operation FROM " . $this->addressBookChangesTableName . " WHERE synctoken >= ? AND synctoken < ? AND addressbookid = ? ORDER BY synctoken";
+            if ($limit>0) $query.= " LIMIT " . (int)$limit;
+
+            // Fetching all changes
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute([$syncToken, $currentToken, $addressBookId]);
+
+            $changes = [];
+
+            // This loop ensures that any duplicates are overwritten, only the
+            // last change on a node is relevant.
+            while($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+
+                $changes[$row['uri']] = $row['operation'];
+
+            }
+
+            foreach($changes as $uri => $operation) {
+
+                switch($operation) {
+                    case 1:
+                        $result['added'][] = $uri;
+                        break;
+                    case 2:
+                        $result['modified'][] = $uri;
+                        break;
+                    case 3:
+                        $result['deleted'][] = $uri;
+                        break;
+                }
+
+            }
+        } else {
+            // No synctoken supplied, this is the initial sync.
+            $query = "SELECT uri FROM cards WHERE addressbookid = ?";
+            $stmt = $this->pdo->prepare($query);
+            $stmt->execute([$addressBookId]);
+
+            $result['added'] = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        }
+        return $result;
+
+    }
+
+    /**
+     * Adds a change record to the addressbookchanges table.
+     *
+     * @param mixed $addressBookId
+     * @param string $objectUri
+     * @param int $operation 1 = add, 2 = modify, 3 = delete/
+     * @return void
+     */
+    protected function addChange($addressBookId, $objectUri, $operation) {
+
+        $stmt = $this->pdo->prepare('INSERT INTO ' . $this->addressBookChangesTableName .' (uri, synctoken, addressbookid, operation) SELECT ?, synctoken, ?, ? FROM addressbooks WHERE id = ?');
+        $stmt->execute([
+            $objectUri,
+            $addressBookId,
+            $operation,
+            $addressBookId
+        ]);
+        $stmt = $this->pdo->prepare('UPDATE ' . $this->addressBooksTableName . ' SET synctoken = synctoken + 1 WHERE id = ?');
+        $stmt->execute([
+            $addressBookId
+        ]);
 
     }
 }

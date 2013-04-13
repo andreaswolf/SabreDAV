@@ -1,20 +1,20 @@
 <?php
 
+namespace Sabre\CalDAV;
+
 /**
  * The CalendarObject represents a single VEVENT or VTODO within a Calendar.
  *
- * @package Sabre
- * @subpackage CalDAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV_ICalendarObject, Sabre_DAVACL_IACL {
+class CalendarObject extends \Sabre\DAV\File implements ICalendarObject, \Sabre\DAVACL\IACL {
 
     /**
-     * Sabre_CalDAV_Backend_BackendInterface
+     * Sabre\CalDAV\Backend\BackendInterface
      *
-     * @var array
+     * @var Sabre\CalDAV\Backend\AbstractBackend
      */
     protected $caldavBackend;
 
@@ -35,19 +35,30 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
     /**
      * Constructor
      *
-     * @param Sabre_CalDAV_Backend_BackendInterface $caldavBackend
+     * The following properties may be passed within $objectData:
+     *
+     *   * calendarid - This must refer to a calendarid from a caldavBackend
+     *   * uri - A unique uri. Only the 'basename' must be passed.
+     *   * calendardata (optional) - The iCalendar data
+     *   * etag - (optional) The etag for this object, MUST be encloded with
+     *            double-quotes.
+     *   * size - (optional) The size of the data in bytes.
+     *   * lastmodified - (optional) format as a unix timestamp.
+     *   * acl - (optional) Use this to override the default ACL for the node.
+     *
+     * @param Backend\BackendInterface $caldavBackend
      * @param array $calendarInfo
      * @param array $objectData
      */
-    public function __construct(Sabre_CalDAV_Backend_BackendInterface $caldavBackend,array $calendarInfo,array $objectData) {
+    public function __construct(Backend\BackendInterface $caldavBackend,array $calendarInfo,array $objectData) {
 
         $this->caldavBackend = $caldavBackend;
 
         if (!isset($objectData['calendarid'])) {
-            throw new InvalidArgumentException('The objectData argument must contain a \'calendarid\' property');
+            throw new \InvalidArgumentException('The objectData argument must contain a \'calendarid\' property');
         }
         if (!isset($objectData['uri'])) {
-            throw new InvalidArgumentException('The objectData argument must contain an \'uri\' property');
+            throw new \InvalidArgumentException('The objectData argument must contain an \'uri\' property');
         }
 
         $this->calendarInfo = $calendarInfo;
@@ -206,6 +217,12 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
      */
     public function getACL() {
 
+        // An alternative acl may be specified in the object data.
+        if (isset($this->objectData['acl'])) {
+            return $this->objectData['acl'];
+        }
+
+        // The default ACL
         return array(
             array(
                 'privilege' => '{DAV:}read',
@@ -247,7 +264,7 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
      */
     public function setACL(array $acl) {
 
-        throw new Sabre_DAV_Exception_MethodNotAllowed('Changing ACL is not yet supported');
+        throw new \Sabre\DAV\Exception\MethodNotAllowed('Changing ACL is not yet supported');
 
     }
 
@@ -255,7 +272,7 @@ class Sabre_CalDAV_CalendarObject extends Sabre_DAV_File implements Sabre_CalDAV
      * Returns the list of supported privileges for this node.
      *
      * The returned data structure is a list of nested privileges.
-     * See Sabre_DAVACL_Plugin::getDefaultSupportedPrivilegeSet for a simple
+     * See \Sabre\DAVACL\Plugin::getDefaultSupportedPrivilegeSet for a simple
      * standard structure.
      *
      * If null is returned from this method, the default privilege set is used,

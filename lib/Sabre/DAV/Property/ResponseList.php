@@ -1,5 +1,9 @@
 <?php
 
+namespace Sabre\DAV\Property;
+
+use Sabre\DAV;
+
 /**
  * ResponseList property
  *
@@ -7,13 +11,11 @@
  * This is used by the Server class to encode items within a multistatus
  * response.
  *
- * @package Sabre
- * @subpackage DAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_DAV_Property_ResponseList extends Sabre_DAV_Property {
+class ResponseList extends DAV\Property {
 
     /**
      * Response objects.
@@ -23,7 +25,7 @@ class Sabre_DAV_Property_ResponseList extends Sabre_DAV_Property {
     private $responses;
 
     /**
-     * The only valid argument is a list of Sabre_DAV_Property_Response
+     * The only valid argument is a list of Sabre\DAV\Property\Response
      * objects.
      *
      * @param array $responses;
@@ -31,8 +33,8 @@ class Sabre_DAV_Property_ResponseList extends Sabre_DAV_Property {
     public function __construct($responses) {
 
         foreach($responses as $response) {
-            if (!($response instanceof Sabre_DAV_Property_Response)) {
-                throw new InvalidArgumentException('You must pass an array of Sabre_DAV_Property_Response objects');
+            if (!($response instanceof Response)) {
+                throw new \InvalidArgumentException('You must pass an array of Sabre\DAV\Property\Response objects');
             }
         }
         $this->responses = $responses;
@@ -40,18 +42,91 @@ class Sabre_DAV_Property_ResponseList extends Sabre_DAV_Property {
     }
 
     /**
+     * Returns the list of Response properties.
+     *
+     * @return Response[]
+     */
+    public function getResponses() {
+
+        return $this->responses;
+
+    }
+
+    /**
      * serialize
      *
-     * @param Sabre_DAV_Server $server
-     * @param DOMElement $dom
+     * @param DAV\Server $server
+     * @param \DOMElement $dom
      * @return void
      */
-    public function serialize(Sabre_DAV_Server $server,DOMElement $dom) {
+    public function serialize(DAV\Server $server,\DOMElement $dom) {
 
         foreach($this->responses as $response) {
             $response->serialize($server, $dom);
         }
 
     }
+
+    /**
+     * Unserializes the property.
+     *
+     * This static method should return a an instance of this object.
+     *
+     * @param \DOMElement $prop
+     * @param array $propertyMap
+     * @return DAV\IProperty
+     */
+    public static function unserialize(\DOMElement $prop, array $propertyMap) {
+
+        $xpath = new \DOMXPath( $prop->ownerDocument );
+        $xpath->registerNamespace('d','DAV:');
+
+        // Finding the 'response' element
+        $xResponses = $xpath->evaluate(
+            'd:response',
+            $prop
+        );
+
+        $result = array();
+
+        for($jj=0; $jj < $xResponses->length; $jj++) {
+
+            $xResponse = $xResponses->item($jj);
+
+            // Parsing 'href'
+            $href = Href::unserialize($xResponse, $propertyMap);
+
+            $properties = [];
+
+            // Parsing 'status' in 'd:response'
+            $responseStatus = $xpath->evaluate('string(d:status)', $xResponse);
+            if ($responseStatus) {
+                list(, $responseStatus,) = explode(' ', $responseStatus, 3);
+            }
+
+
+            // Parsing 'propstat'
+            $xPropstat = $xpath->query('d:propstat', $xResponse);
+
+            for($ii=0; $ii < $xPropstat->length; $ii++) {
+
+                // Parsing 'status'
+                $status = $xpath->evaluate('string(d:status)', $xPropstat->item($ii));
+
+                list(,$statusCode,) = explode(' ', $status, 3);
+
+                // Parsing 'prop'
+                $properties[$statusCode] = DAV\XMLUtil::parseProperties($xPropstat->item($ii), $propertyMap);
+
+            }
+
+            $result[] = new Response($href->getHref(), $properties, $responseStatus?$responseStatus:null);
+
+        }
+
+        return new self($result);
+
+    }
+
 
 }

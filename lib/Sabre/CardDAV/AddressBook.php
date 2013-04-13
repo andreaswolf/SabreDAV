@@ -1,39 +1,43 @@
 <?php
 
+namespace Sabre\CardDAV;
+
+use
+    Sabre\DAV,
+    Sabre\DAVACL;
+
 /**
  * The AddressBook class represents a CardDAV addressbook, owned by a specific user
  *
  * The AddressBook can contain multiple vcards
  *
- * @package Sabre
- * @subpackage CardDAV
- * @copyright Copyright (C) 2007-2012 Rooftop Solutions. All rights reserved.
+ * @copyright Copyright (C) 2007-2013 Rooftop Solutions. All rights reserved.
  * @author Evert Pot (http://www.rooftopsolutions.nl/)
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_CardDAV_IAddressBook, Sabre_DAV_IProperties, Sabre_DAVACL_IACL {
+class AddressBook extends DAV\Collection implements IAddressBook, DAV\IProperties, DAVACL\IACL, DAV\Sync\ISyncCollection, DAV\IMultiGet {
 
     /**
      * This is an array with addressbook information
      *
      * @var array
      */
-    private $addressBookInfo;
+    protected $addressBookInfo;
 
     /**
      * CardDAV backend
      *
-     * @var Sabre_CardDAV_Backend_Abstract
+     * @var Backend\BackendInterface
      */
-    private $carddavBackend;
+    protected $carddavBackend;
 
     /**
      * Constructor
      *
-     * @param Sabre_CardDAV_Backend_Abstract $carddavBackend
+     * @param Backend\BackendInterface $carddavBackend
      * @param array $addressBookInfo
      */
-    public function __construct(Sabre_CardDAV_Backend_Abstract $carddavBackend, array $addressBookInfo) {
+    public function __construct(Backend\BackendInterface $carddavBackend, array $addressBookInfo) {
 
         $this->carddavBackend = $carddavBackend;
         $this->addressBookInfo = $addressBookInfo;
@@ -55,13 +59,13 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      * Returns a card
      *
      * @param string $name
-     * @return Sabre_CardDAV_ICard
+     * @return \ICard
      */
     public function getChild($name) {
 
         $obj = $this->carddavBackend->getCard($this->addressBookInfo['id'],$name);
-        if (!$obj) throw new Sabre_DAV_Exception_NotFound('Card not found');
-        return new Sabre_CardDAV_Card($this->carddavBackend,$this->addressBookInfo,$obj);
+        if (!$obj) throw new DAV\Exception\NotFound('Card not found');
+        return new Card($this->carddavBackend,$this->addressBookInfo,$obj);
 
     }
 
@@ -73,9 +77,30 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
     public function getChildren() {
 
         $objs = $this->carddavBackend->getCards($this->addressBookInfo['id']);
-        $children = array();
+        $children = [];
         foreach($objs as $obj) {
-            $children[] = new Sabre_CardDAV_Card($this->carddavBackend,$this->addressBookInfo,$obj);
+            $obj['acl'] = $this->getChildACL();
+            $children[] = new Card($this->carddavBackend,$this->addressBookInfo,$obj);
+        }
+        return $children;
+
+    }
+
+    /**
+     * This method receives a list of paths in it's first argument.
+     * It must return an array with Node objects.
+     *
+     * If any children are not found, you do not have to return them.
+     *
+     * @return array
+     */
+    public function getMultipleChildren(array $paths) {
+
+        $objs = $this->carddavBackend->getMultipleCards($this->addressBookInfo['id'], $paths);
+        $children = [];
+        foreach($objs as $obj) {
+            $obj['acl'] = $this->getChildACL();
+            $children[] = new Card($this->carddavBackend,$this->addressBookInfo,$obj);
         }
         return $children;
 
@@ -91,7 +116,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      */
     public function createDirectory($name) {
 
-        throw new Sabre_DAV_Exception_MethodNotAllowed('Creating collections in addressbooks is not allowed');
+        throw new DAV\Exception\MethodNotAllowed('Creating collections in addressbooks is not allowed');
 
     }
 
@@ -112,7 +137,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
             $vcardData = stream_get_contents($vcardData);
         }
         // Converting to UTF-8, if needed
-        $vcardData = Sabre_DAV_StringUtil::ensureUTF8($vcardData);
+        $vcardData = DAV\StringUtil::ensureUTF8($vcardData);
 
         return $this->carddavBackend->createCard($this->addressBookInfo['id'],$name,$vcardData);
 
@@ -137,7 +162,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      */
     public function setName($newName) {
 
-        throw new Sabre_DAV_Exception_MethodNotAllowed('Renaming addressbooks is not yet supported');
+        throw new DAV\Exception\MethodNotAllowed('Renaming addressbooks is not yet supported');
 
     }
 
@@ -171,14 +196,14 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      * failures. In this case an array should be returned with the following
      * structure:
      *
-     * array(
-     *   403 => array(
+     * [
+     *   403 => [
      *      '{DAV:}displayname' => null,
-     *   ),
-     *   424 => array(
+     *   ],
+     *   424 => [
      *      '{DAV:}owner' => null,
-     *   )
-     * )
+     *   ]
+     * ]
      *
      * In this example it was forbidden to update {DAV:}displayname.
      * (403 Forbidden), which in turn also caused {DAV:}owner to fail
@@ -206,7 +231,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      */
     public function getProperties($properties) {
 
-        $response = array();
+        $response = [];
         foreach($properties as $propertyName) {
 
             if (isset($this->addressBookInfo[$propertyName])) {
@@ -261,19 +286,43 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      */
     public function getACL() {
 
-        return array(
-            array(
+        return [
+            [
                 'privilege' => '{DAV:}read',
-                'principal' => $this->addressBookInfo['principaluri'],
+                'principal' => $this->getOwner(),
                 'protected' => true,
-            ),
-            array(
+            ],
+            [
                 'privilege' => '{DAV:}write',
-                'principal' => $this->addressBookInfo['principaluri'],
+                'principal' => $this->getOwner(),
                 'protected' => true,
-            ),
+            ],
 
-        );
+        ];
+
+    }
+
+    /**
+     * This method returns the ACL's for card nodes in this address book.
+     * The result of this method automatically gets passed to the
+     * card nodes in this address book.
+     *
+     * @return array
+     */
+    public function getChildACL() {
+
+        return [
+            [
+                'privilege' => '{DAV:}read',
+                'principal' => $this->getOwner(),
+                'protected' => true,
+            ],
+            [
+                'privilege' => '{DAV:}write',
+                'principal' => $this->getOwner(),
+                'protected' => true,
+            ],
+        ];
 
     }
 
@@ -287,7 +336,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      */
     public function setACL(array $acl) {
 
-        throw new Sabre_DAV_Exception_MethodNotAllowed('Changing ACL is not yet supported');
+        throw new DAV\Exception\MethodNotAllowed('Changing ACL is not yet supported');
 
     }
 
@@ -295,7 +344,7 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
      * Returns the list of supported privileges for this node.
      *
      * The returned data structure is a list of nested privileges.
-     * See Sabre_DAVACL_Plugin::getDefaultSupportedPrivilegeSet for a simple
+     * See Sabre\DAVACL\Plugin::getDefaultSupportedPrivilegeSet for a simple
      * standard structure.
      *
      * If null is returned from this method, the default privilege set is used,
@@ -309,4 +358,93 @@ class Sabre_CardDAV_AddressBook extends Sabre_DAV_Collection implements Sabre_Ca
 
     }
 
+    /**
+     * This method returns the current sync-token for this collection.
+     * This can be any string.
+     *
+     * If null is returned from this function, the plugin assumes there's no
+     * sync information available.
+     *
+     * @return string|null
+     */
+    public function getSyncToken() {
+
+        if (
+            $this->carddavBackend instanceof Backend\SyncSupport &&
+            isset($this->addressBookInfo['{DAV:}sync-token'])
+        ) {
+            return $this->addressBookInfo['{DAV:}sync-token'];
+        }
+
+    }
+
+    /**
+     * The getChanges method returns all the changes that have happened, since
+     * the specified syncToken and the current collection.
+     *
+     * This function should return an array, such as the following:
+     *
+     * [
+     *   'syncToken' => 'The current synctoken',
+     *   'added'   => [
+     *      'new.txt',
+     *   ],
+     *   'modified'   => [
+     *      'modified.txt',
+     *   ],
+     *   'deleted' => [
+     *      'foo.php.bak',
+     *      'old.txt'
+     *   ]
+     * ];
+     *
+     * The syncToken property should reflect the *current* syncToken of the
+     * collection, as reported getSyncToken(). This is needed here too, to
+     * ensure the operation is atomic.
+     *
+     * If the syncToken is specified as null, this is an initial sync, and all
+     * members should be reported.
+     *
+     * The modified property is an array of nodenames that have changed since
+     * the last token.
+     *
+     * The deleted property is an array with nodenames, that have been deleted
+     * from collection.
+     *
+     * The second argument is basically the 'depth' of the report. If it's 1,
+     * you only have to report changes that happened only directly in immediate
+     * descendants. If it's 2, it should also include changes from the nodes
+     * below the child collections. (grandchildren)
+     *
+     * The third (optional) argument allows a client to specify how many
+     * results should be returned at most. If the limit is not specified, it
+     * should be treated as infinite.
+     *
+     * If the limit (infinite or not) is higher than you're willing to return,
+     * you should throw a Sabre\DAV\Exception\TooMuchMatches() exception.
+     *
+     * If the syncToken is expired (due to data cleanup) or unknown, you must
+     * return null.
+     *
+     * The limit is 'suggestive'. You are free to ignore it.
+     *
+     * @param string $syncToken
+     * @param int $syncLevel
+     * @param int $limit
+     * @return array
+     */
+    public function getChanges($syncToken, $syncLevel, $limit = null) {
+
+        if (!$this->carddavBackend instanceof Backend\SyncSupport) {
+            return null;
+        }
+
+        return $this->carddavBackend->getChangesForAddressBook(
+            $this->addressBookInfo['id'],
+            $syncToken,
+            $syncLevel,
+            $limit
+        );
+
+    }
 }
